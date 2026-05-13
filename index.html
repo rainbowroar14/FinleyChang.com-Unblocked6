@@ -3,702 +3,1854 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orb Collector</title>
+    <title>3D Physics Sandbox - Smart Spawning</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: hidden;
-            cursor: crosshair;
-        }
-
-        #gameContainer {
-            position: relative;
-            width: 100vw;
-            height: 100vh;
-        }
-
-        #score {
-            position: absolute;
-            top: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 48px;
-            font-weight: bold;
-            color: white;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-            z-index: 100;
-            pointer-events: none;
-        }
-
-        #bigBall {
-            position: absolute;
+        body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        canvas { display: block; }
+        
+        #q-menu {
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #2d3436, #000000);
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
-            transition: all 0.2s ease;
-            z-index: 10;
-            pointer-events: none;
+            width: 80vw;
+            height: 70vh;
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            display: none;
+            flex-direction: column;
+            z-index: 400;
+            color: white;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            pointer-events: auto;
         }
 
-        .orb {
-            position: absolute;
-            border-radius: 50%;
-            background: radial-gradient(circle at 30% 30%, #2d3436, #000000);
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.8);
-            z-index: 5;
-            pointer-events: none;
-            will-change: transform, left, top;
+        .menu-header {
+            display: flex;
+            background: rgba(15, 23, 42, 0.5);
+            padding: 0 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px 12px 0 0;
         }
 
-        .particle {
-            position: absolute;
-            border-radius: 50%;
+        .tab-btn {
+            padding: 15px 25px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            font-weight: bold;
+            opacity: 0.6;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            opacity: 1;
+            border-bottom-color: #3b82f6;
+            color: #3b82f6;
+        }
+
+        .item-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .spawn-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s, background 0.2s;
+            text-align: center;
+            padding: 5px;
+        }
+
+        .spawn-card:hover {
+            background: rgba(59, 130, 246, 0.2);
+            transform: scale(1.05);
+            border-color: #3b82f6;
+        }
+
+        .spawn-card.selected {
+            background: rgba(59, 130, 246, 0.4);
+            border-color: #60a5fa;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);
+        }
+
+        .spawn-card span { font-size: 11px; margin-top: 8px; font-weight: 500; }
+
+        #crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 6px;
+            height: 6px;
             background: white;
+            border: 1px solid black;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
             pointer-events: none;
-            z-index: 4;
+            z-index: 20;
         }
 
-        #instructions {
+        #blocker {
             position: absolute;
-            bottom: 30px;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 300;
+            cursor: pointer;
+        }
+
+        .hud-bottom {
+            position: fixed;
+            bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            color: white;
-            font-size: 18px;
-            text-align: center;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
-            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
             pointer-events: none;
+            z-index: 50;
+        }
+
+        .prompt-pill {
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .status-pill {
+            background: rgba(59, 130, 246, 0.6);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .status-ghost {
+            background: rgba(168, 85, 247, 0.8) !important;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+        }
+
+        .status-debug {
+            background: rgba(234, 179, 8, 0.75) !important;
+            color: #0f172a !important;
+        }
+
+        .spawn-card.debug-tool.selected {
+            border-color: #eab308;
+            box-shadow: 0 0 12px rgba(234, 179, 8, 0.45);
+        }
+
+        #controls-panel {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: min(300px, 44vw);
+            max-height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            z-index: 320;
+            background: rgba(15, 23, 42, 0.92);
+            border-right: 1px solid rgba(148, 163, 184, 0.25);
+            color: #e2e8f0;
+            font-size: 12px;
+            line-height: 1.45;
+            padding: 14px 14px 28px;
+            box-sizing: border-box;
+            pointer-events: auto;
+            box-shadow: 4px 0 24px rgba(0, 0, 0, 0.35);
+            transition: transform 0.25s ease, opacity 0.2s ease;
+        }
+
+        #controls-panel::-webkit-scrollbar { width: 6px; }
+        #controls-panel::-webkit-scrollbar-thumb {
+            background: rgba(71, 85, 105, 0.8);
+            border-radius: 3px;
+        }
+
+        #controls-panel .panel-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin: 0 0 4px;
+            letter-spacing: -0.02em;
+        }
+
+        #controls-panel .panel-sub {
+            font-size: 11px;
+            color: #94a3b8;
+            margin: 0 0 12px;
+        }
+
+        #controls-panel h2 {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #60a5fa;
+            margin: 16px 0 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.25);
+        }
+
+        #controls-panel h2:first-of-type { margin-top: 0; }
+
+        #controls-panel .help-item {
+            margin-bottom: 11px;
+        }
+
+        #controls-panel .help-keys {
+            font-weight: 600;
+            color: #f1f5f9;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 4px;
+        }
+
+        #controls-panel kbd {
+            display: inline-block;
+            font-family: ui-monospace, Consolas, monospace;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(30, 41, 59, 0.95);
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            color: #e2e8f8;
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+        }
+
+        #controls-panel .help-desc {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 3px;
+            padding-left: 1px;
+        }
+
+        #controls-panel .help-tip {
+            font-size: 10px;
+            color: #64748b;
+            font-style: italic;
+            margin-top: 2px;
+        }
+
+        #controls-panel code {
+            font-size: 10px;
+            background: rgba(30, 41, 59, 0.9);
+            padding: 1px 5px;
+            border-radius: 3px;
+            color: #bae6fd;
+        }
+
+        #controls-panel.controls-panel--hidden {
+            transform: translateX(-105%);
+            opacity: 0;
+            pointer-events: none;
+            visibility: hidden;
+            transition: transform 0.25s ease, opacity 0.2s ease;
+        }
+
+        #controls-reveal-btn {
+            position: fixed;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 320;
+            display: none;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 12px 10px 8px;
+            border-radius: 0 10px 10px 0;
+            background: rgba(30, 41, 59, 0.95);
+            color: #e2e8f0;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            border-left: none;
+            box-shadow: 4px 0 16px rgba(0, 0, 0, 0.35);
+            font-family: inherit;
+        }
+
+        #controls-reveal-btn:hover {
+            background: rgba(51, 65, 85, 0.98);
+            color: #fff;
+        }
+
+        #controls-reveal-btn.visible {
+            display: flex;
         }
     </style>
 </head>
 <body>
-    <div id="gameContainer">
-        <div id="score">0</div>
-        <div id="bigBall"></div>
-        <div id="instructions">Click anywhere to spawn orbs!</div>
+
+    <aside id="controls-panel" aria-label="Game controls and tutorial">
+        <p class="panel-title">Physics Sandbox</p>
+        <p class="panel-sub">Controls stay here while you play. Click the dark overlay center to capture the mouse. Press <kbd>H</kbd> anytime to hide or show this panel.</p>
+
+        <h2>Start</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Click</kbd> center screen</div>
+            <p class="help-desc">Locks the pointer so you look with the mouse. Press <kbd>Esc</kbd> to release the cursor.</p>
+        </div>
+
+        <h2>Move &amp; camera</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></div>
+            <p class="help-desc">Walk forward, left, back, and right relative to where you are looking.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Space</kbd></div>
+            <p class="help-desc">Jump when you are on the ground. In ghost mode it moves you up instead.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Ctrl</kbd> <span style="opacity:.6">(left)</span></div>
+            <p class="help-desc">While ghost mode is on, fly downward.</p>
+            <p class="help-tip">Ghost uses no collision so you can pass through objects and the floor.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Shift</kbd> hold</div>
+            <p class="help-desc">Toggle ghost (no-clip) flight while held. Faster than walking.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>G</kbd></div>
+            <p class="help-desc">Cycles <strong>physics time</strong> only: normal → 20% speed → frozen → normal. Your movement, camera, and grab target stay at full speed; only the physics simulation (objects, ropes, rockets, balloons) scales.</p>
+        </div>
+
+        <h2>Spawn menu</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Q</kbd> hold</div>
+            <p class="help-desc">Opens the catalog. Choose Shapes, Props, Presets, or Debug tools. Release <kbd>Q</kbd> to close and return to the game.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>E</kbd></div>
+            <p class="help-desc">Spawns the selected item at the surface you are aiming at (crosshair). If you aim at empty sky it spawns ahead of you above the ground. Under <strong>Props</strong>, <strong>Balloon (floats)</strong> is a tiny light balloon that drifts and climbs on its own.</p>
+        </div>
+
+        <h2>Grab &amp; throw</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Mouse</kbd> left hold</div>
+            <p class="help-desc">Physics grab: pulls the object toward your crosshair on a short rod. Objects are kept from being dragged through the floor.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Mouse</kbd> right</div>
+            <p class="help-desc">While holding something with a normal grab, throws it in the look direction.</p>
+        </div>
+
+        <h2>Debug mode</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>0</kbd></div>
+            <p class="help-desc">Switches between normal physics grab and debug tools. Status pill turns yellow in debug.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Q</kbd> → Debug tab</div>
+            <p class="help-desc"><strong>Move</strong> — click-drag to reposition without the springy constraint.<br>
+            <strong>Resize</strong> — click an object, then scroll the mouse wheel (single box or sphere bodies only).<br>
+            <strong>Delete</strong> — click an object to remove it.<br>
+            <strong>Spawn here</strong> — click a surface to spawn the item you last picked in Shapes/Props/Presets.<br>
+            <strong>Balloon gun</strong> — each click adds lift equal to the <strong>default green sphere’s mass</strong> (same “weight,” reversed as buoyancy). A <strong>separate balloon mesh</strong> rises on a <strong>pink string</strong> from the hit point; when the string goes taut it tugs the object upward. <code>BALLOON_POWER</code> in the script scales total lift. When <code>lift × power &gt; mass</code>, the object rises; the extra drives upward acceleration × gravity strength.<br>
+            <strong>Rope gun</strong> — inelastic max length: slack gently draws the ends together; past max length it resists stretch with capped impulses (stable).<br>
+            <strong>Cord gun</strong> — spring toward the length when you fired: pulls when stretched, pushes when compressed, with damping and a safe impulse cap so energy does not blow up.</p>
+            <p class="help-tip">Switching debug tools or pressing <kbd>0</kbd> cancels an unfinished rope or cord shot.</p>
+        </div>
+
+        <h2>Rocket &amp; launch pad</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>F</kbd></div>
+            <p class="help-desc">Looks for a rocket under the crosshair and toggles its engine. Thrust pushes along the rocket’s nose until you press <kbd>F</kbd> again on the same rocket. Strength uses <code>ROCKET_THRUST_POWER</code> in the script.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys">Launch pad</div>
+            <p class="help-desc">Pink pad: bounces and adds an upward + forward kick when something touches it.</p>
+        </div>
+
+        <h2>Physics tuning</h2>
+        <div class="help-item">
+            <p class="help-desc">In the script: <code>BODY_DENSITY</code> scales how heavy objects are from their size, <code>BALLOON_POWER</code> scales balloon lift, <code>ROCKET_THRUST_POWER</code> scales rocket thrust. Rope/cord: <code>ROPE_MAX_STIFFNESS</code>, <code>ROPE_MAX_DAMPING</code>, <code>ROPE_SLACK_PULL_K</code>, <code>ROPE_IMPULSE_CAP</code>, <code>CORD_SPRING_K</code>, <code>CORD_SPRING_C</code>, <code>CORD_IMPULSE_CAP</code>. Buoyancy uses the same gravity strength as the physics world.</p>
+        </div>
+
+        <h2>Tips</h2>
+        <div class="help-item">
+            <p class="help-desc">Aim at the floor or props to spawn on top of them. Wedge is a solid ramp; use launch pads under balls or crates for big hops. Props include an <strong>NPC</strong> that wanders the floor.</p>
+        </div>
+    </aside>
+
+    <button type="button" id="controls-reveal-btn" aria-label="Show controls (H)">Controls <kbd>H</kbd></button>
+
+    <div id="blocker">
+        <div class="text-center">
+            <h1 class="text-4xl font-bold mb-4">Physics Sandbox</h1>
+            <p class="text-xl opacity-80">Click center to play</p>
+            <p class="mt-6 text-sm opacity-50 max-w-md mx-auto">Full controls are on the left (press <kbd class="px-1 py-0.5 rounded bg-slate-700 border border-slate-500 text-xs">H</kbd> to hide or show). After you start, use <kbd class="px-1 py-0.5 rounded bg-slate-700 border border-slate-500 text-xs">Esc</kbd> to free the mouse.</p>
+        </div>
+    </div>
+
+    <div id="q-menu">
+        <div class="menu-header" id="menu-tabs">
+            <div class="tab-btn active" data-tab="shapes">Shapes</div>
+            <div class="tab-btn" data-tab="props">Props</div>
+            <div class="tab-btn" data-tab="presets">Presets</div>
+            <div class="tab-btn" data-tab="debug">Debug</div>
+        </div>
+        <div id="menu-content" class="item-grid"></div>
+    </div>
+
+    <div id="crosshair"></div>
+
+    <div class="hud-bottom">
+        <div id="status-display" class="status-pill mb-2">Sandbox Mode: Active</div>
+        <div id="time-hud" class="text-[11px] text-amber-200/90 font-semibold mb-1">Physics: Normal</div>
+        <div id="spawn-hint" class="prompt-pill">Aim & Press E to Spawn: Cube</div>
+        <div class="text-[11px] text-white opacity-40" id="counter">0 Objects in Scene</div>
     </div>
 
     <script>
-        const gameContainer = document.getElementById('gameContainer');
-        const bigBall = document.getElementById('bigBall');
-        const scoreElement = document.getElementById('score');
-        
-        let score = 0;
-        let bigBallSize = 50;
-        let centerX = window.innerWidth / 2;
-        let centerY = window.innerHeight / 2;
-        
-        // Track all active orbs
-        const activeOrbs = [];
-        
-        // Initialize big ball
-        bigBall.style.width = bigBallSize + 'px';
-        bigBall.style.height = bigBallSize + 'px';
-        
-        // Big ball physics (can be pulled by combined orbs)
-        let bigBallVx = 0;
-        let bigBallVy = 0;
-        let bigBallPx = window.innerWidth / 2;
-        let bigBallPy = window.innerHeight / 2;
-        
-        // Very subtle liquid jiggle animation for big ball
-        let bigBallJiggleTime = 0;
-        let bigBallAbsorbing = false;
-        function animateBigBall() {
-            bigBallJiggleTime += 0.016;
-            // Jiggle is now handled in animateBigBallPhysics
-            requestAnimationFrame(animateBigBall);
+        const menuData = {
+            shapes: [
+                { id: 'box', name: 'Cube', icon: '📦', height: 1 },
+                { id: 'sphere', name: 'Sphere', icon: '⚽', height: 1.2 },
+                { id: 'pillar', name: 'Pillar', icon: '🏛️', height: 3 },
+                { id: 'platform', name: 'Platform', icon: '📏', height: 0.3 },
+                { id: 'wedge', name: 'Wedge/Ramp', icon: '📐', height: 1.5 },
+                { id: 'bouncer', name: 'Launch Pad', icon: '🚀', height: 0.4 }
+            ],
+            props: [
+                { id: 'duck', name: 'Detailed Duck', icon: '🦆', height: 0.8 },
+                { id: 'angry_bird', name: 'Angry Bird', icon: '🐦', height: 0.7 },
+                { id: 'basketball_hoop', name: 'Hoop', icon: '🏀', height: 4.5 },
+                { id: 'domino', name: 'Giant Domino', icon: '🀄', height: 3 },
+                { id: 'ball', name: 'Giant Ball', icon: '🏐', height: 3 },
+                { id: 'crate', name: 'Destructible Crate', icon: '🗄️', height: 1 },
+                { id: 'rocket', name: 'Rocket (F thrust)', icon: '🛰️', height: 1.2 },
+                { id: 'free_balloon', name: 'Balloon (floats)', icon: '🎈', height: 0.55 },
+                { id: 'npc', name: 'NPC (wanders)', icon: '🙂', height: 1.85 }
+            ],
+            presets: [
+                { id: 'ab_level', name: 'Angry Bird Level', icon: '🏰', height: 10 },
+                { id: 'dominoes', name: 'Domino Line', icon: '🏁', height: 3 },
+                { id: 'bridge', name: 'Supported Bridge', icon: '🌉', height: 3.5 },
+                { id: 'tower', name: 'Duck Tower', icon: '🏯', height: 10 },
+                { id: 'mega_tower', name: 'Mega Tower', icon: '🏰', height: 30 }
+            ],
+            debug: [
+                { id: 'move', name: 'Move (drag)', icon: '✋' },
+                { id: 'resize', name: 'Resize (pick + wheel)', icon: '📏' },
+                { id: 'delete', name: 'Delete (click)', icon: '🗑️' },
+                { id: 'spawn', name: 'Spawn here (click)', icon: '✨' },
+                { id: 'balloon', name: 'Balloon gun', icon: '🎈' },
+                { id: 'rope', name: 'Rope gun', icon: '🪢' },
+                { id: 'cord', name: 'Cord gun', icon: '🔗' }
+            ]
+        };
+
+        const GROUND_Y = 0;
+        const GROUND_EPS = 0.06;
+        const MIN_HOLDER_Y = 0.35;
+
+        /** Rope: resists stretch past max length; gentle pull when slack. */
+        const ROPE_MAX_STIFFNESS = 42;
+        const ROPE_MAX_DAMPING = 11;
+        const ROPE_SLACK_PULL_K = 6.5;
+        const ROPE_SLACK_PULL_C = 2.2;
+        const ROPE_IMPULSE_CAP = 14;
+        /** Cord: bidirectional spring + damping toward rest length (stable). */
+        const CORD_SPRING_K = 28;
+        const CORD_SPRING_C = 9;
+        const CORD_IMPULSE_CAP = 12;
+
+        /** kg per cubic unit — mass scales with volume (size). */
+        const BODY_DENSITY = 2.35;
+        /** Multiplies total balloon lift (same units as body mass). */
+        const BALLOON_POWER = 1.15;
+        /** Multiplies rocket thrust along its nose. */
+        const ROCKET_THRUST_POWER = 1.1;
+        /** Default play sphere radius — balloon adds lift equal to this sphere's mass (weight reversed as buoyancy). */
+        const REFERENCE_SPHERE_RADIUS = 0.6;
+
+        function volumeSphere(r) {
+            return (4 / 3) * Math.PI * r * r * r;
         }
-        animateBigBall();
 
-        // Audio context for sound effects (lazy initialization)
-        let audioContext = null;
-
-        function initAudio() {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
+        function massFromSphere(r) {
+            return BODY_DENSITY * volumeSphere(r);
         }
 
-        function playSound(frequency, duration, type = 'sine') {
-            initAudio();
-            if (!audioContext) return;
-            
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.frequency.value = frequency;
-            oscillator.type = type;
-            
-            gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
-            
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + duration);
+        function massFromBox(hx, hy, hz) {
+            return BODY_DENSITY * (8 * hx * hy * hz);
         }
 
-        function createSpawnParticles(x, y) {
-            const particleCount = 12;
-            for (let i = 0; i < particleCount; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                
-                const size = Math.random() * 4 + 2;
-                particle.style.width = size + 'px';
-                particle.style.height = size + 'px';
-                particle.style.left = x + 'px';
-                particle.style.top = y + 'px';
-                
-                const angle = (Math.PI * 2 * i) / particleCount;
-                const velocity = Math.random() * 50 + 30;
-                const vx = Math.cos(angle) * velocity;
-                const vy = Math.sin(angle) * velocity;
-                
-                gameContainer.appendChild(particle);
-                
-                let opacity = 1;
-                let px = x;
-                let py = y;
-                let startTime = Date.now();
-                
-                function animateParticle() {
-                    const elapsed = (Date.now() - startTime) / 1000;
-                    px += vx * 0.016;
-                    py += vy * 0.016;
-                    opacity -= 0.02;
-                    
-                    particle.style.left = px + 'px';
-                    particle.style.top = py + 'px';
-                    particle.style.opacity = opacity;
-                    
-                    if (opacity > 0) {
-                        requestAnimationFrame(animateParticle);
-                    } else {
-                        particle.remove();
-                    }
-                }
-                
-                requestAnimationFrame(animateParticle);
+        function massFromCylinder(rTop, rBot, h) {
+            const v = Math.PI * h * (rTop * rTop + rTop * rBot + rBot * rBot) / 3;
+            return BODY_DENSITY * v;
+        }
+
+        function resolveMassOverride(override, volumeMass) {
+            return (typeof override === 'number' && !isNaN(override)) ? override : volumeMass;
+        }
+
+        const STANDARD_SPHERE_MASS = massFromSphere(REFERENCE_SPHERE_RADIUS);
+
+        function applyBuoyancyFromBalloons(o, dt) {
+            const liftKg = (o.balloonLiftKg || 0) * BALLOON_POWER;
+            if (liftKg <= 0 || !o.body || o.body.mass <= 0 || !world) return;
+            const gMag = Math.abs(world.gravity.y) || 18;
+            const m = o.body.mass;
+            const net = liftKg - m;
+            if (net > 0) {
+                o.body.velocity.y += (net / m) * gMag * dt;
+            } else {
+                o.body.velocity.y += (liftKg / m) * gMag * 0.22 * dt;
             }
         }
 
-        function spawnOrb(x, y, initialVx = 0, initialVy = 0) {
-            // Play spawn sound
-            playSound(300, 0.1, 'sine');
-            
-            // Create spawn particles
-            createSpawnParticles(x, y);
-            
-            const orb = document.createElement('div');
-            orb.className = 'orb';
-            // Spawn with slight size variation (18-22px range)
-            const sizeVariation = (Math.random() - 0.5) * 4; // -2 to +2
-            let orbSize = 20 + sizeVariation;
-            let orbMass = 1 + (sizeVariation / 10); // Mass proportional to size
-            orb.style.width = orbSize + 'px';
-            orb.style.height = orbSize + 'px';
-            orb.style.left = x - orbSize / 2 + 'px';
-            orb.style.top = y - orbSize / 2 + 'px';
-            
-            gameContainer.appendChild(orb);
-            
-            // Smooth liquid physics
-            const startX = x;
-            const startY = y;
-            let vx = initialVx;
-            let vy = initialVy;
-            let px = startX;
-            let py = startY;
-            
-            // Orb data for combination
-            const orbData = {
-                element: orb,
-                x: px,
-                y: py,
-                vx: vx,
-                vy: vy,
-                size: orbSize,
-                mass: orbMass,
-                px: px,
-                py: py,
-                isMerged: false,
-                momentumBoostX: 0,
-                momentumBoostY: 0
+        function spawnClearanceAlongNormal(type) {
+            const extra = GROUND_EPS;
+            const t = {
+                box: 0.5, sphere: 0.6, ball: 1.5, pillar: 1.5, platform: 0.15,
+                wedge: 1.05, bouncer: 0.22, basketball_hoop: 2.5, angry_bird: 0.35,
+                domino: 1.5, crate: 0.5, duck: 0.55,
+                rocket: 0.95, free_balloon: 0.35, npc: 0.95, bridge: 2, dominoes: 1.5, tower: 2, mega_tower: 3, ab_level: 3
             };
-            activeOrbs.push(orbData);
-            
-            // Subtle jiggle/wobble parameters
-            let jigglePhase = Math.random() * Math.PI * 2;
-            let jiggleSpeed = 0.15 + Math.random() * 0.1;
-            let wobblePhase = Math.random() * Math.PI * 2;
-            let wobbleSpeed = 0.2 + Math.random() * 0.15;
-            
-            const targetRadius = bigBallSize / 2 + orbSize / 2;
-            
-            // Gravitational physics constants
-            const G = 0.4; // Gravitational constant (stronger pull)
-            const maxSpeed = 3.5; // Terminal velocity (increases when closer)
-            const airResistance = 0.998; // Very light air resistance
-            
-            let lastTime = null;
-            let hasReachedCenter = false;
-            let isMerged = false; // Flag to prevent double-merging
-            
-            function animate(currentTime) {
-                if (lastTime === null) lastTime = currentTime;
-                const deltaTime = Math.min((currentTime - lastTime) / 16.67, 2);
-                lastTime = currentTime;
-                
-                if (hasReachedCenter || isMerged) return;
-                
-                // Apply any pending momentum boosts
-                if (orbData.momentumBoostX !== 0 || orbData.momentumBoostY !== 0) {
-                    vx += orbData.momentumBoostX;
-                    vy += orbData.momentumBoostY;
-                    orbData.momentumBoostX = 0;
-                    orbData.momentumBoostY = 0;
+            return (t[type] != null ? t[type] : 0.55) + extra;
+        }
+
+        function makeWedgeConvex() {
+            const verts = [
+                new CANNON.Vec3(0, 0, -1), new CANNON.Vec3(2, 0, -1), new CANNON.Vec3(2, 0, 1), new CANNON.Vec3(0, 0, 1),
+                new CANNON.Vec3(0, 1.2, -1), new CANNON.Vec3(0, 1.2, 1)
+            ];
+            let cx = 0, cy = 0, cz = 0;
+            verts.forEach(v => { cx += v.x; cy += v.y; cz += v.z; });
+            cx /= verts.length; cy /= verts.length; cz /= verts.length;
+            verts.forEach(v => { v.x -= cx; v.y -= cy; v.z -= cz; });
+            const faces = [
+                [0, 3, 2], [0, 2, 1],
+                [1, 2, 5], [1, 5, 4],
+                [0, 1, 4],
+                [3, 5, 2],
+                [0, 4, 5], [0, 5, 3]
+            ];
+            return { verts, faces };
+        }
+
+        function attachLaunchPadImpulse(body) {
+            const padCooldown = new Map();
+            body.addEventListener('collide', (e) => {
+                const other = e.contact.bi === body ? e.contact.bj : e.contact.bi;
+                if (!other || other.mass <= 0 || other === holderBody) return;
+                const now = performance.now();
+                const last = padCooldown.get(other.id) || 0;
+                if (now - last < 120) return;
+                padCooldown.set(other.id, now);
+                const up = new CANNON.Vec3(0, 1, 0);
+                const boost = new CANNON.Vec3();
+                body.quaternion.vmult(new CANNON.Vec3(0, 0.35, 2.8), boost);
+                other.velocity.vadd(new CANNON.Vec3(0, 14, 0), other.velocity);
+                other.velocity.vadd(boost, other.velocity);
+            });
+        }
+
+        function getSimTimeScale() {
+            return timeMode === 0 ? 1 : timeMode === 1 ? 0.2 : 0;
+        }
+
+        function updateTimeHud() {
+            const el = document.getElementById('time-hud');
+            if (!el) return;
+            const labels = ['Physics: Normal', 'Physics: Slow (20%)', 'Physics: Frozen'];
+            el.textContent = labels[timeMode];
+        }
+
+        function cycleTimeMode() {
+            timeMode = (timeMode + 1) % 3;
+            updateTimeHud();
+        }
+
+        function getDespawnYThreshold(o) {
+            if (o.isFreeBalloon || o.type === 'free_balloon') return -220;
+            if ((o.balloonLiftKg || 0) > 0 || (o.balloonAttachments && o.balloonAttachments.length)) return -115;
+            return -50;
+        }
+
+        function createMassLabelSpriteForBody(body, footYLocal) {
+            const mass = body.mass;
+            const text = mass <= 0 ? 'fixed' : `${mass.toFixed(1)} kg`;
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const pad = 8;
+            ctx.font = 'italic 26px Segoe UI, Trebuchet MS, sans-serif';
+            const tw = Math.ceil(ctx.measureText(text).width);
+            canvas.width = Math.max(32, tw + pad * 2);
+            canvas.height = 36;
+            ctx.font = 'italic 26px Segoe UI, Trebuchet MS, sans-serif';
+            ctx.fillStyle = 'rgba(148, 163, 184, 0.95)';
+            ctx.fillText(text, pad, 26);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.needsUpdate = true;
+            const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+            const sprite = new THREE.Sprite(mat);
+            const scl = 0.012;
+            sprite.scale.set(canvas.width * scl, canvas.height * scl, 1);
+            sprite.center.set(0.5, 1);
+            sprite.position.set(0, footYLocal, 0);
+            return sprite;
+        }
+
+        function refreshMassLabel(phyObj) {
+            if (!phyObj || !phyObj.mesh || !phyObj.body) return;
+            if (phyObj.massLabel) {
+                phyObj.mesh.remove(phyObj.massLabel);
+                if (phyObj.massLabel.material && phyObj.massLabel.material.map) phyObj.massLabel.material.map.dispose();
+                phyObj.massLabel.material.dispose();
+            }
+            const footL = -phyObj.footClearance - 0.1;
+            phyObj.massLabel = createMassLabelSpriteForBody(phyObj.body, footL);
+            phyObj.mesh.add(phyObj.massLabel);
+        }
+
+        function compensatePlayerNonSimTime(dt, simDt) {
+            if (isGhostMode || !playerBody || playerBody.mass <= 0) return;
+            const extra = dt - simDt;
+            if (extra <= 1e-8) return;
+            const g = world.gravity.y;
+            playerBody.velocity.y += g * extra;
+            playerBody.position.x += playerBody.velocity.x * extra;
+            playerBody.position.z += playerBody.velocity.z * extra;
+            playerBody.position.y += playerBody.velocity.y * extra;
+            const minY = GROUND_Y + 0.5 + GROUND_EPS;
+            if (playerBody.position.y < minY) {
+                playerBody.position.y = minY;
+                if (playerBody.velocity.y < 0) playerBody.velocity.y = 0;
+            }
+        }
+
+        function getObjectFootClearance(obj) {
+            if (obj && typeof obj.footClearance === 'number') return obj.footClearance;
+            return 0.5;
+        }
+
+        function footClearanceFromType(type) {
+            return Math.max(0.06, spawnClearanceAlongNormal(type) - GROUND_EPS);
+        }
+
+        function clampBodyBottomAboveGround(obj) {
+            const b = obj.body;
+            const minCenterY = GROUND_Y + getObjectFootClearance(obj) + GROUND_EPS;
+            if (b.position.y < minCenterY) {
+                b.position.y = minCenterY;
+                if (b.velocity.y < 0) b.velocity.y = 0;
+            }
+        }
+
+        let activeTab = 'shapes';
+        let selectedItem = menuData.shapes[0];
+        let debugTool = 'move';
+        let isMenuOpen = false;
+        let isGhostMode = false;
+        let debugDragMode = false;
+        let debugDragging = false;
+        let debugResizeTarget = null;
+
+        /** 0 = normal, 1 = 20% slow, 2 = frozen simulation */
+        let timeMode = 0;
+
+        let scene, camera, renderer, world, controls, playerBody;
+        let objectsToUpdate = [];
+        let spawnableMeshes = []; 
+        const clock = new THREE.Clock();
+
+        let defaultContactMaterial;
+        let bouncerMaterial;
+
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, moveUp = false, moveDown = false;
+        const playerSpeed = 10; 
+        const ghostSpeed = 20;
+        const jumpForce = 8;
+
+        let raycaster = new THREE.Raycaster();
+        let mouseConstraint = null;
+        let grabbedObject = null;
+        let grabDist = 5;
+        const holderBody = new CANNON.Body({ mass: 0 });
+
+        let floorPhysicsBody = null;
+        let ropeGunPending = null;
+        const debugRopes = [];
+        let controlsPanelHidden = false;
+
+        function setControlsPanelVisible(visible) {
+            controlsPanelHidden = !visible;
+            const panel = document.getElementById('controls-panel');
+            const btn = document.getElementById('controls-reveal-btn');
+            if (panel) panel.classList.toggle('controls-panel--hidden', controlsPanelHidden);
+            if (btn) btn.classList.toggle('visible', controlsPanelHidden);
+        }
+
+        function toggleControlsPanel() {
+            setControlsPanelVisible(controlsPanelHidden);
+        }
+
+        function clearRopeGunPending() {
+            if (ropeGunPending && ropeGunPending.isAnchor) {
+                world.removeBody(ropeGunPending.body);
+            }
+            ropeGunPending = null;
+        }
+
+        function removeRopeRecord(r) {
+            if (r.constraint) world.removeConstraint(r.constraint);
+            scene.remove(r.line);
+            r.line.geometry.dispose();
+            if (r.disposeA) world.removeBody(r.bodyA);
+            if (r.disposeB) world.removeBody(r.bodyB);
+        }
+
+        function removeAllRopesInvolvingBody(body) {
+            for (let i = debugRopes.length - 1; i >= 0; i--) {
+                const r = debugRopes[i];
+                if (r.bodyA === body || r.bodyB === body) {
+                    removeRopeRecord(r);
+                    debugRopes.splice(i, 1);
                 }
-                
-                // Check for collisions with other orbs
-                // Only process if this orb hasn't been merged yet
-                if (!isMerged) {
-                    for (let i = 0; i < activeOrbs.length; i++) {
-                        const otherOrb = activeOrbs[i];
-                        if (otherOrb === orbData || !otherOrb.element.parentNode || otherOrb.isMerged || isMerged) continue;
-                        
-                        // Ensure momentum boost properties exist
-                        if (otherOrb.momentumBoostX === undefined) {
-                            otherOrb.momentumBoostX = 0;
-                            otherOrb.momentumBoostY = 0;
-                        }
-                        
-                        const dx = otherOrb.px - px;
-                        const dy = otherOrb.py - py;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = (orbSize + otherOrb.size) / 2;
-                        
-                        if (dist < minDist && dist > 0 && !isMerged && !otherOrb.isMerged) {
-                            const sizeDiff = Math.abs(orbSize - otherOrb.size);
-                            const sizeThreshold = 0.5; // Threshold for "identical" size
-                            
-                            // If sizes are identical (within threshold), both disappear
-                            if (sizeDiff < sizeThreshold) {
-                                // Both disappear
-                                isMerged = true;
-                                otherOrb.isMerged = true;
-                                
-                                // Create explosion particles
-                                createSpawnParticles(px, py);
-                                createSpawnParticles(otherOrb.px, otherOrb.py);
-                                
-                                // Play explosion sound
-                                playSound(200, 0.3, 'sawtooth');
-                                
-                                // Remove both orbs
-                                orb.remove();
-                                otherOrb.element.remove();
-                                const index1 = activeOrbs.indexOf(orbData);
-                                const index2 = activeOrbs.indexOf(otherOrb);
-                                if (index1 > -1) activeOrbs.splice(index1, 1);
-                                if (index2 > -1 && index2 > index1) activeOrbs.splice(index2 - 1, 1);
-                                else if (index2 > -1) activeOrbs.splice(index2, 1);
-                                
-                                return; // Stop animation
-                            }
-                            
-                            // Determine which orb is bigger
-                            const thisIsBigger = orbSize > otherOrb.size;
-                            const biggerOrb = thisIsBigger ? orbData : otherOrb;
-                            const smallerOrb = thisIsBigger ? otherOrb : orbData;
-                            const biggerSize = thisIsBigger ? orbSize : otherOrb.size;
-                            const smallerSize = thisIsBigger ? otherOrb.size : orbSize;
-                            const biggerMass = thisIsBigger ? orbMass : otherOrb.mass;
-                            const smallerMass = thisIsBigger ? otherOrb.mass : orbMass;
-                            
-                            // If small hits big (size ratio > 1.5), big absorbs and gains momentum
-                            const sizeRatio = biggerSize / smallerSize;
-                            if (sizeRatio > 1.5 && !isMerged && !otherOrb.isMerged) {
-                                // Mark smaller orb as merged
-                                smallerOrb.isMerged = true;
-                                
-                                // Calculate momentum transfer based on size difference
-                                const momentumTransfer = 0.3 * (smallerSize / biggerSize); // More momentum if smaller is relatively larger
-                                const smallerSpeed = Math.sqrt(smallerOrb.vx * smallerOrb.vx + smallerOrb.vy * smallerOrb.vy);
-                                
-                                // Add momentum to bigger orb in direction of smaller orb's velocity
-                                if (thisIsBigger) {
-                                    vx += smallerOrb.vx * momentumTransfer;
-                                    vy += smallerOrb.vy * momentumTransfer;
-                                    orbData.vx = vx;
-                                    orbData.vy = vy;
-                                } else {
-                                    // We're the smaller one, add momentum boost to bigger orb
-                                    biggerOrb.momentumBoostX += smallerOrb.vx * momentumTransfer;
-                                    biggerOrb.momentumBoostY += smallerOrb.vy * momentumTransfer;
-                                }
-                                
-                                // Combine masses and sizes
-                                const totalMass = biggerMass + smallerMass;
-                                const totalSize = Math.sqrt(biggerSize * biggerSize + smallerSize * smallerSize);
-                                
-                                // Update bigger orb
-                                if (thisIsBigger) {
-                                    orbMass = totalMass;
-                                    orbSize = totalSize;
-                                    orb.style.width = orbSize + 'px';
-                                    orb.style.height = orbSize + 'px';
-                                    orbData.mass = orbMass;
-                                    orbData.size = orbSize;
-                                } else {
-                                    biggerOrb.mass = totalMass;
-                                    biggerOrb.size = totalSize;
-                                    biggerOrb.element.style.width = totalSize + 'px';
-                                    biggerOrb.element.style.height = totalSize + 'px';
-                                }
-                                
-                                // Remove smaller orb
-                                smallerOrb.element.remove();
-                                const index = activeOrbs.indexOf(smallerOrb);
-                                if (index > -1) activeOrbs.splice(index, 1);
-                                
-                                // Play merge sound
-                                playSound(250, 0.2, 'sine');
-                                
-                                // If we're the smaller one, mark as merged and stop
-                                if (!thisIsBigger) {
-                                    isMerged = true;
-                                    orb.remove();
-                                    const index2 = activeOrbs.indexOf(orbData);
-                                    if (index2 > -1) activeOrbs.splice(index2, 1);
-                                    return;
-                                }
-                                
-                                break;
-                            } else if (!isMerged && !otherOrb.isMerged) {
-                                // Similar sizes - normal merge
-                                otherOrb.isMerged = true;
-                                
-                                // Combine orbs
-                                const totalMass = orbMass + otherOrb.mass;
-                                const totalSize = Math.sqrt(orbSize * orbSize + otherOrb.size * otherOrb.size);
-                                
-                                // Merge velocities (conservation of momentum)
-                                vx = (vx * orbMass + otherOrb.vx * otherOrb.mass) / totalMass;
-                                vy = (vy * orbMass + otherOrb.vy * otherOrb.mass) / totalMass;
-                                
-                                // Update orb properties
-                                orbMass = totalMass;
-                                orbSize = totalSize;
-                                orb.style.width = orbSize + 'px';
-                                orb.style.height = orbSize + 'px';
-                                orbData.mass = orbMass;
-                                orbData.size = orbSize;
-                                
-                                // Remove other orb
-                                otherOrb.element.remove();
-                                const index = activeOrbs.indexOf(otherOrb);
-                                if (index > -1) activeOrbs.splice(index, 1);
-                                
-                                // Play merge sound
-                                playSound(250, 0.2, 'sine');
-                                break;
-                            }
-                            
-                            // Break if we got merged
-                            if (isMerged) break;
-                        }
+            }
+        }
+
+        const _linkN = new CANNON.Vec3();
+        const _linkRelV = new CANNON.Vec3();
+        const _linkImp = new CANNON.Vec3();
+
+        function applyImpulsePairRopeCord(bA, bB, unitN, J) {
+            if (J <= 0) return;
+            if (bA.mass > 0 && bA.invMass > 0) {
+                _linkImp.copy(unitN);
+                _linkImp.scale(J * bA.invMass, _linkImp);
+                bA.velocity.vadd(_linkImp, bA.velocity);
+            }
+            if (bB.mass > 0 && bB.invMass > 0) {
+                _linkImp.copy(unitN);
+                _linkImp.scale(J * bB.invMass, _linkImp);
+                bB.velocity.vsub(_linkImp, bB.velocity);
+            }
+        }
+
+        /** Signed impulse along A→B: J>0 pulls A toward B; J<0 pushes apart (cord compression). */
+        function applyLinkImpulseJ(bA, bB, unitN, J) {
+            if (Math.abs(J) < 1e-8) return;
+            if (bA.mass > 0 && bA.invMass > 0) {
+                _linkImp.copy(unitN);
+                _linkImp.scale(J * bA.invMass, _linkImp);
+                bA.velocity.vadd(_linkImp, bA.velocity);
+            }
+            if (bB.mass > 0 && bB.invMass > 0) {
+                _linkImp.copy(unitN);
+                _linkImp.scale(J * bB.invMass, _linkImp);
+                bB.velocity.vsub(_linkImp, bB.velocity);
+            }
+        }
+
+        function applyRopeAndCordForces(dt) {
+            const eps = 1e-5;
+            for (let i = 0; i < debugRopes.length; i++) {
+                const r = debugRopes[i];
+                if (!r.kind) continue;
+                r.bodyB.position.vsub(r.bodyA.position, _linkN);
+                const dist = _linkN.length();
+                if (dist < eps) continue;
+                _linkN.normalize();
+
+                r.bodyB.velocity.vsub(r.bodyA.velocity, _linkRelV);
+                const closingSpeed = _linkRelV.dot(_linkN);
+
+                if (r.kind === 'rope') {
+                    const over = dist - r.maxLength;
+                    if (over > 0) {
+                        const F = r.ropeK * over - r.ropeC * closingSpeed;
+                        const J = Math.min(Math.max(F * dt, 0), ROPE_IMPULSE_CAP);
+                        applyImpulsePairRopeCord(r.bodyA, r.bodyB, _linkN, J);
+                    } else {
+                        const slackness = r.maxLength - dist;
+                        let Jslack = ROPE_SLACK_PULL_K * slackness * dt * 0.09;
+                        Jslack = Math.min(Jslack, ROPE_IMPULSE_CAP * 0.28);
+                        if (Jslack > 1e-4) applyImpulsePairRopeCord(r.bodyA, r.bodyB, _linkN, Jslack);
                     }
+                } else if (r.kind === 'cord') {
+                    const err = dist - r.restLength;
+                    const F = r.k * err - r.c * closingSpeed;
+                    const J = Math.max(-CORD_IMPULSE_CAP, Math.min(CORD_IMPULSE_CAP, F * dt));
+                    applyLinkImpulseJ(r.bodyA, r.bodyB, _linkN, J);
                 }
-                
-                // Don't continue if merged
-                if (isMerged) return;
-                
-                const dx = centerX - px;
-                const dy = centerY - py;
-                const distToCenter = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distToCenter < targetRadius) {
-                    // Orb reached center - smooth squish
-                    hasReachedCenter = true;
-                    
-                    orb.style.transform = 'scale(1.6, 0.25)';
-                    orb.style.transition = 'transform 0.2s ease-out';
-                    
-                    setTimeout(() => {
-                        // Grow big ball
-                        bigBallSize += 3;
-                        bigBall.style.width = bigBallSize + 'px';
-                        bigBall.style.height = bigBallSize + 'px';
-                        
-                        // Big ball squish on absorption
-                        bigBallAbsorbing = true;
-                        const startTime = Date.now();
-                        function absorbAnimation() {
-                            const elapsed = (Date.now() - startTime) / 1000;
-                            if (elapsed < 0.25) {
-                                const progress = elapsed / 0.25;
-                                const jiggle = Math.sin(progress * Math.PI * 3) * 0.08 * (1 - progress);
-                                const scaleX = 1.12 + jiggle;
-                                const scaleY = 0.94 - jiggle;
-                                bigBall.style.transform = `translate(-50%, -50%) scale(${scaleX}, ${scaleY})`;
-                                requestAnimationFrame(absorbAnimation);
-                            } else {
-                                bigBall.style.transform = 'translate(-50%, -50%) scale(1, 1)';
-                                bigBallAbsorbing = false;
-                            }
-                        }
-                        absorbAnimation();
-                        
-                        score++;
-                        scoreElement.textContent = score;
-                        
-                        // Play collection sound
-                        playSound(400, 0.15, 'sine');
-                        
-                        // Remove orb from active list
-                        const index = activeOrbs.indexOf(orbData);
-                        if (index > -1) activeOrbs.splice(index, 1);
-                        
-                        // Remove orb
-                        orb.remove();
-                    }, 200);
+            }
+        }
+
+        function finishRopeOrCordLink(end) {
+            const A = ropeGunPending;
+            const B = end;
+            ropeGunPending = null;
+            if (A.body === B.body) {
+                if (A.isAnchor) world.removeBody(A.body);
+                return;
+            }
+            const separation = A.body.position.distanceTo(B.body.position);
+            const linkDist = Math.max(0.28, separation * 0.998);
+            const kind = debugTool === 'cord' ? 'cord' : 'rope';
+            const geom = new THREE.BufferGeometry();
+            const pos = new Float32Array(6);
+            geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const lineColor = kind === 'cord' ? 0xfbbf24 : 0xd8b4fe;
+            const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: lineColor }));
+            scene.add(line);
+            const rec = {
+                kind,
+                line,
+                bodyA: A.body,
+                bodyB: B.body,
+                disposeA: A.isAnchor,
+                disposeB: B.isAnchor
+            };
+            if (kind === 'rope') {
+                rec.maxLength = linkDist;
+                rec.ropeK = ROPE_MAX_STIFFNESS;
+                rec.ropeC = ROPE_MAX_DAMPING;
+            } else {
+                rec.restLength = linkDist;
+                rec.k = CORD_SPRING_K;
+                rec.c = CORD_SPRING_C;
+            }
+            debugRopes.push(rec);
+        }
+
+        function pickRopeEndpointFromRay() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects(spawnableMeshes, true);
+            if (!hits.length) return null;
+            const hit = hits[0];
+            const pt = hit.point.clone();
+            const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+            pt.addScaledVector(n, 0.05);
+            let phyObj = null;
+            objectsToUpdate.forEach(o => {
+                o.mesh.traverse(c => { if (c === hit.object) phyObj = o; });
+                if (o.mesh === hit.object) phyObj = o;
+            });
+            if (phyObj && phyObj.body.mass > 0) {
+                return { body: phyObj.body, isAnchor: false, phyObj };
+            }
+            const anchor = new CANNON.Body({ mass: 0 });
+            anchor.addShape(new CANNON.Sphere(0.07));
+            anchor.position.set(pt.x, pt.y, pt.z);
+            anchor.collisionFilterGroup = 0;
+            anchor.collisionFilterMask = 0;
+            world.addBody(anchor);
+            return { body: anchor, isAnchor: true, phyObj: null };
+        }
+
+        const _bAttachLocal = new THREE.Vector3();
+        const _bAnchorWorld = new THREE.Vector3();
+        const _bRopeVec = new THREE.Vector3();
+
+        function attachBalloonVisual(obj, worldPoint) {
+            if (!obj.balloonAttachments) obj.balloonAttachments = [];
+            const localAttach = new THREE.Vector3();
+            obj.mesh.worldToLocal(localAttach.copy(worldPoint));
+
+            const g = new THREE.Group();
+            const stringMat = new THREE.MeshStandardMaterial({ color: 0x78716c });
+            const str = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.45, 6), stringMat);
+            str.position.y = 0.22;
+            const ballMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, emissive: 0x9d174d, emissiveIntensity: 0.25 });
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 10), ballMat);
+            ball.position.y = 0.52;
+            g.add(str, ball);
+
+            obj.mesh.updateMatrixWorld(true);
+            _bAnchorWorld.copy(worldPoint);
+            const balloonWorldPos = new THREE.Vector3(worldPoint.x, worldPoint.y + 0.55, worldPoint.z);
+            g.position.copy(balloonWorldPos);
+            scene.add(g);
+
+            const geom = new THREE.BufferGeometry();
+            const pos = new Float32Array(6);
+            geom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            const line = new THREE.Line(geom, new THREE.LineBasicMaterial({ color: 0xf9a8d4 }));
+            scene.add(line);
+
+            obj.balloonAttachments.push({
+                localAttach,
+                group: g,
+                line,
+                riseSpeed: 2.0,
+                ropeMaxLength: 4.2,
+                balloonWorldPos
+            });
+        }
+
+        function advanceBalloonAttachments(simDt) {
+            if (simDt <= 0) return;
+            objectsToUpdate.forEach(obj => {
+                if (!obj.balloonAttachments || !obj.balloonAttachments.length || !obj.body || obj.body.mass <= 0) return;
+                obj.mesh.updateMatrixWorld(true);
+                obj.balloonAttachments.forEach(att => {
+                    _bAnchorWorld.copy(att.localAttach).applyMatrix4(obj.mesh.matrixWorld);
+                    att.balloonWorldPos.y += att.riseSpeed * simDt;
+                    _bRopeVec.subVectors(att.balloonWorldPos, _bAnchorWorld);
+                    const dist = _bRopeVec.length();
+                    if (dist > att.ropeMaxLength) {
+                        _bRopeVec.multiplyScalar(att.ropeMaxLength / Math.max(dist, 1e-6));
+                        att.balloonWorldPos.copy(_bAnchorWorld).add(_bRopeVec);
+                        obj.body.velocity.y += 3.2 * simDt;
+                    }
+                    att.group.position.copy(att.balloonWorldPos);
+                });
+            });
+        }
+
+        function drawBalloonAttachmentLines() {
+            objectsToUpdate.forEach(obj => {
+                if (!obj.balloonAttachments || !obj.balloonAttachments.length) return;
+                obj.mesh.updateMatrixWorld(true);
+                obj.balloonAttachments.forEach(att => {
+                    _bAnchorWorld.copy(att.localAttach).applyMatrix4(obj.mesh.matrixWorld);
+                    att.group.position.copy(att.balloonWorldPos);
+                    const arr = att.line.geometry.attributes.position.array;
+                    arr[0] = _bAnchorWorld.x;
+                    arr[1] = _bAnchorWorld.y;
+                    arr[2] = _bAnchorWorld.z;
+                    arr[3] = att.balloonWorldPos.x;
+                    arr[4] = att.balloonWorldPos.y + 0.12;
+                    arr[5] = att.balloonWorldPos.z;
+                    att.line.geometry.attributes.position.needsUpdate = true;
+                });
+            });
+        }
+
+        function initMenuUI() {
+            const tabs = document.querySelectorAll('.tab-btn');
+            tabs.forEach(tab => {
+                tab.onclick = () => {
+                    const prevTab = activeTab;
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    activeTab = tab.dataset.tab;
+                    if (prevTab === 'debug' && activeTab !== 'debug') clearRopeGunPending();
+                    renderGrid();
+                };
+            });
+            renderGrid();
+        }
+
+        function renderGrid() {
+            const content = document.getElementById('menu-content');
+            content.innerHTML = '';
+            if (activeTab === 'debug') {
+                menuData.debug.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = `spawn-card debug-tool ${debugTool === item.id ? 'selected' : ''}`;
+                    card.innerHTML = `<div class="text-3xl">${item.icon}</div><span>${item.name}</span>`;
+                    card.onclick = () => {
+                        debugTool = item.id;
+                        clearRopeGunPending();
+                        renderGrid();
+                    };
+                    content.appendChild(card);
+                });
+                return;
+            }
+            menuData[activeTab].forEach(item => {
+                const card = document.createElement('div');
+                card.className = `spawn-card ${selectedItem && selectedItem.id === item.id ? 'selected' : ''}`;
+                card.innerHTML = `<div class="text-3xl">${item.icon}</div><span>${item.name}</span>`;
+                card.onclick = () => {
+                    selectedItem = item;
+                    document.getElementById('spawn-hint').innerText = `Aim & Press E to Spawn: ${item.name}`;
+                    renderGrid();
+                };
+                content.appendChild(card);
+            });
+        }
+
+        function updateDragModeHud() {
+            const status = document.getElementById('status-display');
+            if (isGhostMode) return;
+            if (debugDragMode) {
+                status.innerText = `Debug grab: ${debugTool} (0 = normal)`;
+                status.classList.add('status-debug');
+            } else {
+                status.innerText = 'Sandbox Mode: Active';
+                status.classList.remove('status-debug');
+            }
+        }
+
+        function toggleDebugDragMode() {
+            debugDragMode = !debugDragMode;
+            if (mouseConstraint) onMouseUp();
+            debugDragging = false;
+            debugResizeTarget = null;
+            clearRopeGunPending();
+            updateDragModeHud();
+        }
+
+        function toggleQMenu(show) {
+            isMenuOpen = show;
+            const menu = document.getElementById('q-menu');
+            menu.style.display = show ? 'flex' : 'none';
+            if (show) {
+                if (controls.isLocked) controls.unlock();
+            } else {
+                setTimeout(() => {
+                    if (!isMenuOpen) {
+                        try { controls.lock(); } catch (e) {}
+                    }
+                }, 100);
+            }
+        }
+
+        function toggleGhostMode(enable) {
+            isGhostMode = enable;
+            const status = document.getElementById('status-display');
+            if (enable) {
+                status.innerText = "Ghost Mode: Active (No-Clip)";
+                status.classList.remove('status-debug');
+                status.classList.add('status-ghost');
+                playerBody.collisionFilterGroup = 0;
+                playerBody.collisionFilterMask = 0;
+                playerBody.mass = 0;
+                playerBody.updateMassProperties();
+                playerBody.velocity.set(0, 0, 0);
+            } else {
+                status.classList.remove('status-ghost');
+                playerBody.collisionFilterGroup = 1;
+                playerBody.collisionFilterMask = -1;
+                playerBody.mass = 80;
+                playerBody.updateMassProperties();
+                updateDragModeHud();
+            }
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+            scene.fog = new THREE.Fog(0x0f172a, 0, 150);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.PointerLockControls(camera, document.body);
+            const blocker = document.getElementById('blocker');
+            blocker.addEventListener('click', () => {
+                if (!isMenuOpen) {
+                   try { controls.lock(); } catch (e) {}
+                }
+            });
+            controls.addEventListener('lock', () => blocker.style.display = 'none');
+            controls.addEventListener('unlock', () => {
+                if (!isMenuOpen) blocker.style.display = 'flex';
+            });
+            scene.add(controls.getObject());
+
+            world = new CANNON.World();
+            world.gravity.set(0, -18.0, 0); 
+            world.broadphase = new CANNON.SAPBroadphase(world);
+
+            defaultContactMaterial = world.defaultContactMaterial;
+            bouncerMaterial = new CANNON.Material('bouncer');
+            world.addContactMaterial(new CANNON.ContactMaterial(defaultContactMaterial, bouncerMaterial, {
+                friction: 0.05,
+                restitution: 1.35
+            }));
+            
+            const playerShape = new CANNON.Sphere(0.5);
+            playerBody = new CANNON.Body({ mass: 80, fixedRotation: true, shape: playerShape });
+            playerBody.position.set(0, 5, 5);
+            world.addBody(playerBody);
+
+            holderBody.collisionFilterGroup = 0;
+            holderBody.collisionFilterMask = 0;
+            world.addBody(holderBody);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+            sun.position.set(30, 50, 30);
+            sun.castShadow = true;
+            scene.add(sun);
+
+            const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.receiveShadow = true;
+            scene.add(floorMesh);
+            spawnableMeshes.push(floorMesh);
+
+            floorPhysicsBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+            floorPhysicsBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+            world.addBody(floorPhysicsBody);
+            scene.add(new THREE.GridHelper(1000, 200, 0x334155, 0x1e293b));
+
+            document.addEventListener('keydown', (e) => {
+                if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+                if (e.code === 'KeyH' && !e.repeat) {
+                    toggleControlsPanel();
                     return;
                 }
-                
-                // Calculate direction to center (unit vector)
-                const dirX = dx / distToCenter;
-                const dirY = dy / distToCenter;
-                
-                // Gravitational force: F = G * M / r^2
-                // Stronger when closer - using inverse square law
-                const minDist = 15;
-                const effectiveDist = Math.max(distToCenter, minDist);
-                
-                // Inverse square law - much stronger when closer
-                const gravitationalForce = (G * orbMass) / (effectiveDist * effectiveDist);
-                
-                // Dynamic terminal velocity - faster when closer
-                const dynamicMaxSpeed = maxSpeed * (1 + (500 / Math.max(distToCenter, 50)));
-                
-                // Apply gravitational acceleration
-                // F = ma, so a = F/m
-                const ax = dirX * gravitationalForce;
-                const ay = dirY * gravitationalForce;
-                
-                // Update velocity with gravitational acceleration
-                vx += ax;
-                vy += ay;
-                
-                // Apply light air resistance
-                vx *= airResistance;
-                vy *= airResistance;
-                
-                // Cap velocity at dynamic terminal velocity
-                const currentSpeed = Math.sqrt(vx * vx + vy * vy);
-                if (currentSpeed > dynamicMaxSpeed) {
-                    const scale = dynamicMaxSpeed / currentSpeed;
-                    vx *= scale;
-                    vy *= scale;
+                if (e.code === 'Digit0' && !e.repeat) {
+                    toggleDebugDragMode();
+                    return;
                 }
+                if (e.code === 'KeyF' && controls.isLocked && !isMenuOpen) {
+                    toggleRocketThrustAtCrosshair();
+                    return;
+                }
+                if (e.code === 'KeyG' && !e.repeat && controls.isLocked && !isMenuOpen) {
+                    cycleTimeMode();
+                    return;
+                }
+                if (e.code === 'KeyQ') { toggleQMenu(true); return; }
+                if (e.code === 'KeyE' && !isMenuOpen) smartSpawn(selectedItem.id);
+                if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleGhostMode(true);
                 
-                // Update position using velocity
-                px += vx;
-                py += vy;
-                
-                // Update orb data
-                orbData.px = px;
-                orbData.py = py;
-                orbData.vx = vx;
-                orbData.vy = vy;
-                
-                // Subtle liquid jiggle - gentle oscillation
-                jigglePhase += jiggleSpeed;
-                wobblePhase += wobbleSpeed;
-                
-                const speedFactor = Math.min(currentSpeed / maxSpeed, 1);
-                const jiggleAmount = 0.8 * speedFactor;
-                const jiggleX = Math.sin(jigglePhase) * jiggleAmount;
-                const jiggleY = Math.cos(jigglePhase * 1.2) * jiggleAmount;
-                
-                // Apply subtle jiggle
-                const finalX = px + jiggleX;
-                const finalY = py + jiggleY;
-                
-                orb.style.left = finalX - orbSize / 2 + 'px';
-                orb.style.top = finalY - orbSize / 2 + 'px';
-                
-                // Gentle liquid deformation
-                const speed = Math.sqrt(vx * vx + vy * vy);
-                const stretchX = 1 + Math.abs(vx) * 0.4;
-                const stretchY = 1 + Math.abs(vy) * 0.4;
-                const wobble = Math.sin(wobblePhase) * 0.08 * speedFactor;
-                
-                // Smooth liquid shape
-                const scaleX = Math.max(0.85, Math.min(1.25, stretchX + wobble));
-                const scaleY = Math.max(0.85, Math.min(1.25, stretchY - wobble));
-                
-                // Gentle rotation
-                const baseRotation = Math.atan2(vy, vx) * (180 / Math.PI);
-                const rotationWobble = Math.sin(wobblePhase * 1.5) * 4;
-                
-                orb.style.transform = `scale(${scaleX}, ${scaleY}) rotate(${baseRotation + rotationWobble}deg)`;
-                
-                requestAnimationFrame(animate);
-            }
+                switch(e.code) {
+                    case 'KeyW': moveForward = true; break;
+                    case 'KeyS': moveBackward = true; break;
+                    case 'KeyA': moveLeft = true; break;
+                    case 'KeyD': moveRight = true; break;
+                    case 'ControlLeft': moveDown = true; break;
+                    case 'Space': 
+                        moveUp = true;
+                        if (!isGhostMode && Math.abs(playerBody.velocity.y) < 1) {
+                            playerBody.velocity.y = jumpForce; 
+                        }
+                        break;
+                }
+            });
+
+            document.addEventListener('keyup', (e) => {
+                if (e.code === 'KeyQ') toggleQMenu(false);
+                if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleGhostMode(false);
+
+                switch(e.code) {
+                    case 'KeyW': moveForward = false; break;
+                    case 'KeyS': moveBackward = false; break;
+                    case 'KeyA': moveLeft = false; break;
+                    case 'KeyD': moveRight = false; break;
+                    case 'Space': moveUp = false; break;
+                    case 'ControlLeft': moveDown = false; break;
+                }
+            });
+
+            document.addEventListener('mousedown', onMouseDown);
+            document.addEventListener('mouseup', onMouseUp);
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('wheel', onWheel, { passive: false });
+            document.addEventListener('contextmenu', (e) => {
+                if (controls && controls.isLocked) e.preventDefault();
+            });
+            window.addEventListener('resize', onWindowResize);
+
+            document.getElementById('controls-reveal-btn').addEventListener('click', () => setControlsPanelVisible(true));
             
-            requestAnimationFrame(animate);
+            initMenuUI();
+            updateDragModeHud();
+            updateTimeHud();
+            animate();
         }
 
-        // Drag handler for momentum
-        let isDragging = false;
-        let dragStartX = 0;
-        let dragStartY = 0;
-        let dragLastX = 0;
-        let dragLastY = 0;
-        let dragStartTime = 0;
-        
-        document.addEventListener('mousedown', (e) => {
-            isDragging = true;
-            dragStartX = e.clientX;
-            dragStartY = e.clientY;
-            dragLastX = e.clientX;
-            dragLastY = e.clientY;
-            dragStartTime = Date.now();
-        });
-        
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging) {
-                dragLastX = e.clientX;
-                dragLastY = e.clientY;
+        function removeObject(obj) {
+            if (grabbedObject === obj) {
+                if (mouseConstraint) {
+                    world.removeConstraint(mouseConstraint);
+                    mouseConstraint = null;
+                }
+                grabbedObject = null;
+                debugDragging = false;
             }
-        });
-        
-        let lastSpawnTime = 0;
-        
-        document.addEventListener('mouseup', (e) => {
-            if (isDragging) {
-                const dragTime = (Date.now() - dragStartTime) / 1000;
-                const dragDistance = Math.sqrt(
-                    Math.pow(dragLastX - dragStartX, 2) + 
-                    Math.pow(dragLastY - dragStartY, 2)
-                );
-                
-                // Calculate velocity from drag
-                const velocityScale = 0.15;
-                const vx = (dragLastX - dragStartX) * velocityScale / Math.max(dragTime, 0.1);
-                const vy = (dragLastY - dragStartY) * velocityScale / Math.max(dragTime, 0.1);
-                
-                spawnOrb(dragStartX, dragStartY, vx, vy);
-                lastSpawnTime = Date.now();
-                isDragging = false;
+            if (debugResizeTarget === obj) debugResizeTarget = null;
+            removeAllRopesInvolvingBody(obj.body);
+            if (obj.balloonAttachments && obj.balloonAttachments.length) {
+                obj.balloonAttachments.forEach(att => {
+                    scene.remove(att.group);
+                    att.group.traverse(ch => {
+                        if (ch.geometry) ch.geometry.dispose();
+                        if (ch.material) ch.material.dispose();
+                    });
+                    scene.remove(att.line);
+                    att.line.geometry.dispose();
+                    att.line.material.dispose();
+                });
+                obj.balloonAttachments = null;
             }
-        });
-        
-        // Also support click without drag
-        document.addEventListener('click', (e) => {
-            // Only spawn if it wasn't a drag (quick click)
-            const timeSinceDrag = Date.now() - dragStartTime;
-            const timeSinceLastSpawn = Date.now() - lastSpawnTime;
-            if (timeSinceDrag < 100 && timeSinceLastSpawn > 50) {
-                spawnOrb(e.clientX, e.clientY, 0, 0);
-                lastSpawnTime = Date.now();
+            if (obj.massLabel) {
+                obj.mesh.remove(obj.massLabel);
+                if (obj.massLabel.material && obj.massLabel.material.map) obj.massLabel.material.map.dispose();
+                obj.massLabel.material.dispose();
+                obj.massLabel = null;
             }
-        });
-        
-        // Animate big ball being pulled by combined orbs
-        function animateBigBallPhysics() {
-            // Calculate total gravitational pull from all orbs
-            let totalPullX = 0;
-            let totalPullY = 0;
-            const bigBallG = 0.0005; // Stronger pull on big ball
+            world.removeBody(obj.body);
+            scene.remove(obj.mesh);
             
-            for (const orb of activeOrbs) {
-                if (!orb.element.parentNode) continue;
+            obj.mesh.traverse(c => {
+                const idx = spawnableMeshes.indexOf(c);
+                if (idx > -1) spawnableMeshes.splice(idx, 1);
+            });
+
+            const index = objectsToUpdate.indexOf(obj);
+            if (index > -1) objectsToUpdate.splice(index, 1);
+            updateCounter();
+        }
+
+        function createPhysicsObject(type, pos, massOverride = null, rot = null) {
+            let mesh, body;
+            let wedgeMinY = null;
+            const mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            
+            if (type === 'box') {
+                const hx = 0.5, hy = 0.5, hz = 0.5;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+                mat.color.set(0xf87171);
+            } else if (type === 'sphere' || type === 'ball') {
+                const radius = type === 'ball' ? 1.5 : 0.6;
+                const m = resolveMassOverride(massOverride, massFromSphere(radius));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Sphere(radius) });
+                mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 24), mat);
+                mat.color.set(type === 'ball' ? 0xa855f7 : 0x4ade80);
+            } else if (type === 'pillar') {
+                const hx = 0.3, hy = 1.5, hz = 0.3;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(0.6, 3, 0.6), mat);
+                mat.color.set(0x60a5fa);
+            } else if (type === 'platform') {
+                const w = massOverride === 'bridge' ? 10 : 2.5;
+                const l = massOverride === 'bridge' ? 2.5 : 2.5;
+                const baseM = massFromBox(w, 0.15, l);
+                let m;
+                if (massOverride === 'fragile') m = baseM * 0.38;
+                else if (massOverride === 'bridge') m = baseM * 1.35;
+                else m = baseM * 1.85;
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(w, 0.15, l)) });
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(w*2, 0.3, l*2), mat);
+                mat.color.set(massOverride === 'fragile' ? 0xd1d5db : 0x94a3b8);
+            } else if (type === 'wedge') {
+                const w = makeWedgeConvex();
+                const verts = w.verts.map(v => v.clone());
+                const m = resolveMassOverride(massOverride, massFromBox(1, 0.55, 1) * 0.92);
+                body = new CANNON.Body({ mass: m });
+                try {
+                    body.addShape(new CANNON.ConvexPolyhedron(verts, w.faces));
+                } catch (err) {
+                    body.addShape(new CANNON.Box(new CANNON.Vec3(1, 0.45, 1)));
+                }
+                const positions = [];
+                verts.forEach(v => positions.push(v.x, v.y, v.z));
+                const idx = [
+                    0, 3, 2, 0, 2, 1,
+                    1, 2, 5, 1, 5, 4,
+                    0, 1, 4,
+                    3, 5, 2,
+                    0, 4, 5, 0, 5, 3
+                ];
+                const geom = new THREE.BufferGeometry();
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                geom.setIndex(idx);
+                geom.computeVertexNormals();
+                mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: 0x22c55e, flatShading: true }));
+                wedgeMinY = Math.min(...verts.map(v => v.y));
+            } else if (type === 'bouncer') {
+                const hx = 1.2, hy = 0.2, hz = 1.2;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz) * 1.15);
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                body.material = bouncerMaterial;
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.4, 2.4), new THREE.MeshStandardMaterial({ color: 0xf472b6, emissive: 0x831843, emissiveIntensity: 0.35 }));
+                attachLaunchPadImpulse(body);
+            } else if (type === 'basketball_hoop') {
+                body = new CANNON.Body({ mass: 0 });
+                // Post
+                body.addShape(new CANNON.Box(new CANNON.Vec3(0.1, 2, 0.1)), new CANNON.Vec3(0, 2, -1));
+                // Backboard
+                body.addShape(new CANNON.Box(new CANNON.Vec3(1.5, 1, 0.05)), new CANNON.Vec3(0, 4, -0.9));
+                // Rim (Approximated with several boxes)
+                for(let i=0; i<8; i++) {
+                    const angle = (i / 8) * Math.PI * 2;
+                    const rx = Math.cos(angle) * 0.8;
+                    const rz = Math.sin(angle) * 0.8;
+                    const shape = new CANNON.Box(new CANNON.Vec3(0.3, 0.05, 0.1));
+                    const q = new CANNON.Quaternion();
+                    q.setFromEuler(0, -angle, 0);
+                    body.addShape(shape, new CANNON.Vec3(rx, 3.5, rz - 0.2), q);
+                }
+
+                mesh = new THREE.Group();
+                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 4), new THREE.MeshStandardMaterial({color: 0x334155}));
+                post.position.set(0, 2, -1);
+                const backboard = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 0.1), new THREE.MeshStandardMaterial({color: 0xffffff, transparent: true, opacity: 0.8}));
+                backboard.position.set(0, 4, -0.9);
+                const rim = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.05, 8, 24), new THREE.MeshStandardMaterial({color: 0xef4444}));
+                rim.rotation.x = Math.PI/2;
+                rim.position.set(0, 3.5, -0.2);
+                mesh.add(post, backboard, rim);
+            } else if (type === 'angry_bird') {
+                const r = 0.35;
+                const m = resolveMassOverride(massOverride, massFromSphere(r));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Sphere(r) });
+                mesh = new THREE.Group();
+                const bodyM = new THREE.Mesh(new THREE.SphereGeometry(0.35), new THREE.MeshStandardMaterial({color: 0xef4444}));
+                const belly = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshStandardMaterial({color: 0xffedd5}));
+                belly.rotation.x = Math.PI/2;
+                belly.position.z = 0.1;
+                const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshStandardMaterial({color: 0x000000}));
+                eyeL.position.set(-0.1, 0.1, 0.28);
+                const eyeR = eyeL.clone();
+                eyeR.position.x = 0.1;
+                const beak = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2), new THREE.MeshStandardMaterial({color: 0xfacc15}));
+                beak.rotation.x = Math.PI/2;
+                beak.position.set(0, 0, 0.4);
+                mesh.add(bodyM, belly, eyeL, eyeR, beak);
+
+                body.addEventListener("collide", (e) => {
+                    if (e.contact.getImpactVelocityAlongNormal() > 8) {
+                        const currentObj = objectsToUpdate.find(o => o.body === body);
+                        if (currentObj) {
+                            const pos = body.position.clone();
+                            for(let i=0; i<8; i++) createPhysicsObject('feather', new CANNON.Vec3(pos.x + (Math.random()-0.5)*0.5, pos.y + (Math.random()-0.5)*0.5, pos.z + (Math.random()-0.5)*0.5));
+                            removeObject(currentObj);
+                        }
+                    }
+                });
+            } else if (type === 'feather') {
+                const r = 0.05;
+                const m = resolveMassOverride(massOverride, massFromSphere(r) * 0.55);
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Sphere(r) });
+                mesh = new THREE.Mesh(new THREE.SphereGeometry(0.1, 4, 4), new THREE.MeshStandardMaterial({color: 0xef4444, transparent: true, opacity: 0.7}));
+            } else if (type === 'crate') {
+                const hx = 0.5, hy = 0.5, hz = 0.5;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                mesh = new THREE.Group();
+                const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({color: 0x78350f}));
+                const trim1 = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.1, 0.1), new THREE.MeshStandardMaterial({color: 0x451a03}));
+                const trim2 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.05, 0.1), new THREE.MeshStandardMaterial({color: 0x451a03}));
+                mesh.add(box, trim1, trim2);
                 
-                // Only large combined orbs can pull the big ball
-                if (orb.mass >= 2) {
-                    const dx = orb.px - bigBallPx;
-                    const dy = orb.py - bigBallPy;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    
-                    if (dist > 0 && dist < 500) {
-                        const dirX = dx / dist;
-                        const dirY = dy / dist;
-                        const force = (bigBallG * orb.mass) / (dist * dist);
-                        totalPullX += dirX * force;
-                        totalPullY += dirY * force;
+                body.addEventListener("collide", (e) => {
+                    const relativeVelocity = e.contact.getImpactVelocityAlongNormal();
+                    if (relativeVelocity > 12) {
+                        const currentObj = objectsToUpdate.find(o => o.body === body);
+                        if (currentObj) {
+                            const pos = body.position.clone();
+                            const currentVel = body.velocity.clone();
+                            for(let i=0; i<6; i++) {
+                                createPhysicsObject('debris', new CANNON.Vec3(
+                                    pos.x + (Math.random()-0.5), 
+                                    pos.y + (Math.random()-0.5), 
+                                    pos.z + (Math.random()-0.5)
+                                ), currentVel); // Pass current velocity to debris
+                            }
+                            removeObject(currentObj);
+                        }
+                    }
+                });
+            } else if (type === 'debris') {
+                const hx = 0.2, hy = 0.1, hz = 0.2;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                // If massOverride is a velocity vector, apply it
+                if (massOverride instanceof CANNON.Vec3) {
+                    body.velocity.copy(massOverride);
+                    // Add a bit of random spray
+                    body.velocity.x += (Math.random()-0.5) * 5;
+                    body.velocity.y += (Math.random()-0.5) * 5;
+                    body.velocity.z += (Math.random()-0.5) * 5;
+                }
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.4), new THREE.MeshStandardMaterial({color: 0x78350f}));
+            } else if (type === 'domino') {
+                const hx = 0.4, hy = 1.5, hz = 0.15;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(0.8, 3, 0.3), mat);
+                mat.color.set(0xffffff);
+            } else if (type === 'duck') {
+                const m = resolveMassOverride(massOverride, massFromSphere(0.4) + massFromSphere(0.25));
+                body = new CANNON.Body({ mass: m });
+                body.addShape(new CANNON.Sphere(0.4));
+                body.addShape(new CANNON.Sphere(0.25), new CANNON.Vec3(0, 0.4, 0.2));
+                mesh = new THREE.Group();
+                const dBody = new THREE.Mesh(new THREE.SphereGeometry(0.4), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
+                const dHead = new THREE.Mesh(new THREE.SphereGeometry(0.25), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
+                dHead.position.set(0, 0.4, 0.2);
+                const beak = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.2), new THREE.MeshStandardMaterial({ color: 0xf97316 }));
+                beak.rotation.x = Math.PI/2;
+                beak.position.set(0, 0.4, 0.45);
+                mesh.add(dBody, dHead, beak);
+            } else if (type === 'rocket') {
+                const m = resolveMassOverride(massOverride,
+                    massFromCylinder(0.14, 0.12, 0.65) + massFromSphere(0.18));
+                body = new CANNON.Body({ mass: m });
+                body.addShape(new CANNON.Cylinder(0.14, 0.12, 0.65, 10));
+                body.addShape(new CANNON.Sphere(0.18), new CANNON.Vec3(0, 0.42, 0));
+                mesh = new THREE.Group();
+                const fus = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.14, 0.12, 0.65, 12),
+                    new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.35, roughness: 0.45 })
+                );
+                const nose = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.18, 0.38, 12),
+                    new THREE.MeshStandardMaterial({ color: 0xef4444, metalness: 0.2, roughness: 0.4 })
+                );
+                nose.position.y = 0.48;
+                const flame = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.1, 0.22, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xf97316, emissive: 0xea580c, emissiveIntensity: 0.6 })
+                );
+                flame.position.y = -0.48;
+                flame.rotation.z = Math.PI;
+                mesh.add(fus, nose, flame);
+            } else if (type === 'npc') {
+                const hx = 0.18, hy = 0.5, hz = 0.14;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                body.fixedRotation = true;
+                body.linearDamping = 0.38;
+                mesh = new THREE.Group();
+                const torso = new THREE.Mesh(
+                    new THREE.BoxGeometry(hx * 2, hy * 1.05, hz * 2),
+                    new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.55 })
+                );
+                torso.position.y = -0.04;
+                const head = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.2, 14, 14),
+                    new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.4 })
+                );
+                head.position.y = 0.58;
+                const eyeL = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.038, 8, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x0f172a })
+                );
+                eyeL.position.set(-0.07, 0.6, 0.17);
+                const eyeR = eyeL.clone();
+                eyeR.position.x = 0.07;
+                const mouth = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.055, 0.018, 6, 14, Math.PI),
+                    new THREE.MeshStandardMaterial({ color: 0x0f172a })
+                );
+                mouth.rotation.x = Math.PI / 2;
+                mouth.rotation.y = Math.PI;
+                mouth.position.set(0, 0.45, 0.17);
+                mesh.add(torso, head, eyeL, eyeR, mouth);
+            } else if (type === 'free_balloon') {
+                const r = 0.11;
+                const m = resolveMassOverride(massOverride, massFromSphere(r) * 0.22);
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Sphere(r) });
+                mesh = new THREE.Group();
+                const stringMat = new THREE.MeshStandardMaterial({ color: 0x78716c });
+                const str = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.32, 6), stringMat);
+                str.position.y = 0.16;
+                const ballMat = new THREE.MeshStandardMaterial({ color: 0xf472b6, emissive: 0x9d174d, emissiveIntensity: 0.35 });
+                const ball = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 10), ballMat);
+                ball.position.y = 0.38;
+                mesh.add(str, ball);
+            } else {
+                const hx = 0.5, hy = 0.5, hz = 0.5;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz));
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+            }
+
+            if (body && mesh) {
+                body.position.copy(pos);
+                if (rot) body.quaternion.copy(rot);
+                world.addBody(body);
+                mesh.traverse(child => { 
+                    if(child.isMesh) { 
+                        child.castShadow = child.receiveShadow = true; 
+                        spawnableMeshes.push(child);
+                    } 
+                });
+                scene.add(mesh);
+                const phyObj = {
+                    mesh, body, type,
+                    rocketThrustOn: false,
+                    balloonLiftKg: type === 'free_balloon' ? STANDARD_SPHERE_MASS * 2.2 : 0,
+                    balloonAttachments: [],
+                    isFreeBalloon: type === 'free_balloon',
+                    isNpc: type === 'npc',
+                    footClearance: wedgeMinY != null ? Math.max(0.12, -wedgeMinY + GROUND_EPS * 2) : footClearanceFromType(type)
+                };
+                phyObj.massLabel = createMassLabelSpriteForBody(body, -phyObj.footClearance - 0.1);
+                phyObj.mesh.add(phyObj.massLabel);
+                objectsToUpdate.push(phyObj);
+                updateCounter();
+            }
+        }
+
+        function buildTowerUnit(startX, startY, startZ, type = 'duck') {
+            let curY = startY;
+            for(let i=0; i<3; i++) {
+                createPhysicsObject('pillar', new CANNON.Vec3(startX-1.5, curY+1.5, startZ-1.5), type === 'ab' ? 4 : 8);
+                createPhysicsObject('pillar', new CANNON.Vec3(startX+1.5, curY+1.5, startZ-1.5), type === 'ab' ? 4 : 8);
+                createPhysicsObject('pillar', new CANNON.Vec3(startX-1.5, curY+1.5, startZ+1.5), type === 'ab' ? 4 : 8);
+                createPhysicsObject('pillar', new CANNON.Vec3(startX+1.5, curY+1.5, startZ+1.5), type === 'ab' ? 4 : 8);
+                curY += 3;
+                createPhysicsObject('platform', new CANNON.Vec3(startX, curY + 0.15, startZ), type === 'ab' ? 'fragile' : null);
+                curY += 0.3;
+                createPhysicsObject(type === 'ab' ? 'angry_bird' : 'duck', new CANNON.Vec3(startX, curY + 0.4, startZ));
+            }
+            return curY;
+        }
+
+        function smartSpawn(type) {
+            raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
+            const intersects = raycaster.intersectObjects(spawnableMeshes);
+            
+            let spawnPos;
+            const lift = spawnClearanceAlongNormal(type);
+            if (intersects.length > 0) {
+                const hit = intersects[0];
+                const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+                spawnPos = new CANNON.Vec3(
+                    hit.point.x + n.x * lift,
+                    hit.point.y + n.y * lift,
+                    hit.point.z + n.z * lift
+                );
+            } else {
+                const lookDir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                const p = new THREE.Vector3().copy(camera.position).add(lookDir.multiplyScalar(6));
+                spawnPos = new CANNON.Vec3(p.x, p.y, p.z);
+                const minY = GROUND_Y + lift + GROUND_EPS;
+                if (spawnPos.y < minY) spawnPos.y = minY;
+            }
+            
+            if (type === 'bridge') {
+                createPhysicsObject('platform', new CANNON.Vec3(spawnPos.x, spawnPos.y + 1.5, spawnPos.z), 'bridge');
+                const xOffsets = [-8, -3, 3, 8], zOffsets = [-2, 2];
+                xOffsets.forEach(ox => zOffsets.forEach(oz => createPhysicsObject('pillar', new CANNON.Vec3(spawnPos.x + ox, spawnPos.y - 1.5, spawnPos.z + oz))));
+            } else if (type === 'dominoes') {
+                for(let i=0; i<20; i++) createPhysicsObject('domino', new CANNON.Vec3(spawnPos.x, spawnPos.y, spawnPos.z + (i * 1.5)));
+            } else if (type === 'tower') {
+                buildTowerUnit(spawnPos.x, spawnPos.y, spawnPos.z);
+            } else if (type === 'mega_tower') {
+                let currentY = spawnPos.y;
+                for (let j = 0; j < 3; j++) {
+                    currentY = buildTowerUnit(spawnPos.x, currentY, spawnPos.z);
+                }
+            } else if (type === 'ab_level') {
+                for(let k=0; k<3; k++) {
+                   buildTowerUnit(spawnPos.x + (k-1)*8, spawnPos.y, spawnPos.z, 'ab');
+                }
+            } else {
+                createPhysicsObject(type, spawnPos);
+            }
+        }
+
+        function pickObjectFromRay() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const bodies = objectsToUpdate.map(o => o.mesh);
+            const intersects = raycaster.intersectObjects(bodies, true);
+            if (!intersects.length) return null;
+            const hit = intersects[0];
+            let obj = null;
+            objectsToUpdate.forEach(o => {
+                o.mesh.traverse(c => { if (c === hit.object) obj = o; });
+                if (o.mesh === hit.object) obj = o;
+            });
+            return obj;
+        }
+
+        function toggleRocketThrustAtCrosshair() {
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const bodies = objectsToUpdate.map(o => o.mesh);
+            const intersects = raycaster.intersectObjects(bodies, true);
+            for (let i = 0; i < intersects.length; i++) {
+                const hit = intersects[i];
+                let obj = null;
+                objectsToUpdate.forEach(o => {
+                    o.mesh.traverse(c => { if (c === hit.object) obj = o; });
+                    if (o.mesh === hit.object) obj = o;
+                });
+                if (obj && obj.type === 'rocket' && obj.body.mass > 0) {
+                    obj.rocketThrustOn = !obj.rocketThrustOn;
+                    return;
+                }
+            }
+        }
+
+        function applyDebugScale(obj, factor) {
+            if (!obj || !obj.body || obj.body.shapes.length !== 1) return;
+            const sh = obj.body.shapes[0];
+            const volScale = factor * factor * factor;
+            if (sh.halfExtents) {
+                sh.halfExtents.x *= factor;
+                sh.halfExtents.y *= factor;
+                sh.halfExtents.z *= factor;
+                obj.body.mass *= volScale;
+                obj.body.updateMassProperties();
+                obj.mesh.scale.multiplyScalar(factor);
+                obj.footClearance *= factor;
+            } else if (typeof sh.radius === 'number') {
+                sh.radius *= factor;
+                obj.body.mass *= volScale;
+                obj.body.updateMassProperties();
+                obj.mesh.scale.multiplyScalar(factor);
+                obj.footClearance *= factor;
+            }
+            refreshMassLabel(obj);
+        }
+
+        function onMouseMove() {
+            if (!controls.isLocked || !debugDragMode || !debugDragging || debugTool !== 'move' || !grabbedObject) return;
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects(spawnableMeshes);
+            let target;
+            if (hits.length > 0) {
+                const hit = hits[0];
+                target = hit.point.clone();
+                const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
+                const lift = getObjectFootClearance(grabbedObject);
+                target.addScaledVector(n, lift + GROUND_EPS * 0.5);
+            } else {
+                const d = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                target = camera.position.clone().add(d.multiplyScalar(grabDist));
+            }
+            const minY = GROUND_Y + getObjectFootClearance(grabbedObject) + GROUND_EPS;
+            target.y = Math.max(target.y, minY);
+            grabbedObject.body.position.set(target.x, target.y, target.z);
+            grabbedObject.body.velocity.set(0, 0, 0);
+            grabbedObject.body.angularVelocity.set(0, 0, 0);
+        }
+
+        function onWheel(e) {
+            if (!controls.isLocked || !debugDragMode || debugTool !== 'resize' || !debugResizeTarget) return;
+            e.preventDefault();
+            const dir = e.deltaY > 0 ? 0.92 : 1.08;
+            applyDebugScale(debugResizeTarget, dir);
+        }
+
+        function onMouseDown(e) {
+            if (!controls.isLocked) return;
+            if (e.button === 0) {
+                if (debugDragMode) {
+                    if (debugTool === 'delete') {
+                        const obj = pickObjectFromRay();
+                        if (obj && obj.body.mass > 0) removeObject(obj);
+                        return;
+                    }
+                    if (debugTool === 'spawn') {
+                        if (!isMenuOpen) smartSpawn(selectedItem.id);
+                        return;
+                    }
+                    if (debugTool === 'balloon') {
+                        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                        const bodies = objectsToUpdate.map(o => o.mesh);
+                        const hits = raycaster.intersectObjects(bodies, true);
+                        if (!hits.length) return;
+                        const hit = hits[0];
+                        let obj = null;
+                        objectsToUpdate.forEach(o => {
+                            o.mesh.traverse(c => { if (c === hit.object) obj = o; });
+                            if (o.mesh === hit.object) obj = o;
+                        });
+                        if (!obj || obj.body.mass <= 0) return;
+                        obj.balloonLiftKg = (obj.balloonLiftKg || 0) + STANDARD_SPHERE_MASS;
+                        attachBalloonVisual(obj, hit.point);
+                        return;
+                    }
+                    if (debugTool === 'rope' || debugTool === 'cord') {
+                        const end = pickRopeEndpointFromRay();
+                        if (!end) {
+                            clearRopeGunPending();
+                            return;
+                        }
+                        if (!ropeGunPending) {
+                            ropeGunPending = end;
+                            return;
+                        }
+                        finishRopeOrCordLink(end);
+                        return;
+                    }
+                    if (debugTool === 'resize') {
+                        const obj = pickObjectFromRay();
+                        debugResizeTarget = obj && obj.body.mass > 0 ? obj : null;
+                        return;
+                    }
+                    if (debugTool === 'move') {
+                        const obj = pickObjectFromRay();
+                        if (obj && obj.body.mass > 0) {
+                            grabbedObject = obj;
+                            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                            const hi = raycaster.intersectObjects([obj.mesh], true);
+                            grabDist = hi.length ? hi[0].distance : 5;
+                            debugDragging = true;
+                        }
+                        return;
+                    }
+                    return;
+                }
+                raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                const bodies = objectsToUpdate.map(o => o.mesh);
+                const intersects = raycaster.intersectObjects(bodies, true);
+                
+                if (intersects.length > 0) {
+                    const hit = intersects[0];
+                    let obj = null;
+                    objectsToUpdate.forEach(o => {
+                        o.mesh.traverse(c => { if(c === hit.object) obj = o; });
+                        if(o.mesh === hit.object) obj = o;
+                    });
+
+                    if (obj && obj.body.mass > 0) { 
+                        grabbedObject = obj;
+                        grabDist = hit.distance;
+                        const localPivot = obj.body.pointToLocalFrame(new CANNON.Vec3(hit.point.x, hit.point.y, hit.point.z));
+                        holderBody.position.copy(hit.point);
+                        holderBody.position.y = Math.max(holderBody.position.y, MIN_HOLDER_Y);
+                        mouseConstraint = new CANNON.PointToPointConstraint(obj.body, localPivot, holderBody, new CANNON.Vec3(0,0,0));
+                        world.addConstraint(mouseConstraint);
                     }
                 }
+            } else if (e.button === 2 && grabbedObject && !debugDragMode) {
+                const look = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                grabbedObject.body.velocity.set(look.x * 50, look.y * 50, look.z * 50);
+                onMouseUp();
             }
-            
-            // Apply pull to big ball
-            bigBallVx += totalPullX;
-            bigBallVy += totalPullY;
-            
-            // Less damping for more movement
-            bigBallVx *= 0.97;
-            bigBallVy *= 0.97;
-            
-            // Update big ball position
-            bigBallPx += bigBallVx;
-            bigBallPy += bigBallVy;
-            
-            // Keep big ball somewhat centered (weaker spring back)
-            const centerPull = 0.01;
-            bigBallVx += (centerX - bigBallPx) * centerPull;
-            bigBallVy += (centerY - bigBallPy) * centerPull;
-            
-            // Update center for gravity calculations
-            centerX = bigBallPx;
-            centerY = bigBallPy;
-            
-            // Update big ball visual position (combine with jiggle transform)
-            if (!bigBallAbsorbing) {
-                bigBallJiggleTime += 0.016;
-                const jiggleX = Math.sin(bigBallJiggleTime * 0.5) * 0.008;
-                const jiggleY = Math.cos(bigBallJiggleTime * 0.7) * 0.008;
-                const scaleX = 1 + jiggleX;
-                const scaleY = 1 + jiggleY;
-                const offsetX = bigBallPx - window.innerWidth / 2;
-                const offsetY = bigBallPy - window.innerHeight / 2;
-                bigBall.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px)) scale(${scaleX}, ${scaleY})`;
-            }
-            
-            requestAnimationFrame(animateBigBallPhysics);
         }
-        animateBigBallPhysics();
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            // Recalculate center
-            const newCenterX = window.innerWidth / 2;
-            const newCenterY = window.innerHeight / 2;
-            bigBallPx += newCenterX - centerX;
-            bigBallPy += newCenterY - centerY;
-            centerX = newCenterX;
-            centerY = newCenterY;
-        });
+        function onMouseUp() {
+            if (mouseConstraint) {
+                world.removeConstraint(mouseConstraint);
+                mouseConstraint = null;
+            }
+            grabbedObject = null;
+            debugDragging = false;
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function updateCounter() {
+            document.getElementById('counter').innerText = `${objectsToUpdate.length} Objects in Scene`;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.1);
+            const simDt = dt * getSimTimeScale();
+
+            if (controls.isLocked) {
+                const speed = isGhostMode ? ghostSpeed : playerSpeed;
+                const inputDir = new THREE.Vector3();
+                inputDir.z = Number(moveBackward) - Number(moveForward); 
+                inputDir.x = Number(moveRight) - Number(moveLeft); 
+                inputDir.normalize();
+                const moveVec = new THREE.Vector3().copy(inputDir).applyQuaternion(camera.quaternion);
+                
+                if (isGhostMode) {
+                    const vertDir = Number(moveUp) - Number(moveDown);
+                    playerBody.position.x += moveVec.x * speed * dt;
+                    playerBody.position.z += moveVec.z * speed * dt;
+                    playerBody.position.y += vertDir * speed * dt;
+                    playerBody.velocity.set(0, 0, 0);
+                } else {
+                    playerBody.velocity.x = moveVec.x * speed;
+                    playerBody.velocity.z = moveVec.z * speed;
+                }
+
+                camera.position.copy(playerBody.position);
+                camera.position.y += 0.5; 
+
+                if (mouseConstraint) {
+                    const target = new THREE.Vector3(0, 0, -grabDist).applyQuaternion(camera.quaternion).add(camera.position);
+                    target.y = Math.max(target.y, MIN_HOLDER_Y);
+                    holderBody.position.copy(target);
+                }
+            }
+
+            advanceBalloonAttachments(simDt);
+
+            if (simDt > 0) {
+                objectsToUpdate.forEach(o => {
+                    if (o.isNpc && o.body && o.body.mass > 0) {
+                        if (o._npcPhase == null) o._npcPhase = Math.random() * Math.PI * 2;
+                        o._npcPhase += simDt * (0.52 + 0.34 * Math.sin(performance.now() * 0.0011));
+                        const walk = 2.65;
+                        o.body.velocity.x = Math.cos(o._npcPhase) * walk;
+                        o.body.velocity.z = Math.sin(o._npcPhase) * walk;
+                        const yaw = Math.atan2(o.body.velocity.x, o.body.velocity.z);
+                        o.body.quaternion.setFromEuler(0, yaw, 0);
+                    }
+                    if (o.type === 'rocket' && o.rocketThrustOn && o.body && o.body.mass > 0) {
+                        const dir = new CANNON.Vec3();
+                        o.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0), dir);
+                        const push = 38 * simDt * ROCKET_THRUST_POWER;
+                        o.body.velocity.x += dir.x * push;
+                        o.body.velocity.y += dir.y * push;
+                        o.body.velocity.z += dir.z * push;
+                    }
+                    if (o.isFreeBalloon && o.body && o.body.mass > 0) {
+                        o.body.velocity.y += 6.2 * simDt;
+                    }
+                    applyBuoyancyFromBalloons(o, simDt);
+                });
+
+                applyRopeAndCordForces(simDt);
+
+                world.step(1/60, simDt, 3);
+            }
+
+            compensatePlayerNonSimTime(dt, simDt);
+            
+            objectsToUpdate.forEach(o => {
+                o.mesh.position.copy(o.body.position);
+                o.mesh.quaternion.copy(o.body.quaternion);
+                if (o.body.position.y < getDespawnYThreshold(o)) removeObject(o);
+            });
+
+            drawBalloonAttachmentLines();
+
+            debugRopes.forEach(r => {
+                const pa = r.bodyA.position;
+                const pb = r.bodyB.position;
+                const arr = r.line.geometry.attributes.position.array;
+                arr[0] = pa.x; arr[1] = pa.y; arr[2] = pa.z;
+                arr[3] = pb.x; arr[4] = pb.y; arr[5] = pb.z;
+                r.line.geometry.attributes.position.needsUpdate = true;
+            });
+
+            if (grabbedObject && mouseConstraint) clampBodyBottomAboveGround(grabbedObject);
+
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
     </script>
 </body>
 </html>
