@@ -6,7 +6,6 @@
     <title>3D Physics Sandbox - Smart Spawning</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
@@ -107,16 +106,44 @@
         }
 
         #blocker {
-            position: absolute;
+            position: fixed;
+            inset: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.7);
+            background-color: rgba(0,0,0,0.72);
             display: flex;
             justify-content: center;
             align-items: center;
             color: white;
-            z-index: 300;
+            z-index: 310;
             cursor: pointer;
+            pointer-events: auto;
+        }
+
+        #pointer-lock-hint {
+            display: none;
+            max-width: 28rem;
+        }
+
+        #pointer-lock-hint.visible {
+            display: block;
+        }
+
+        #boot-error {
+            display: none;
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 0;
+            z-index: 500;
+            padding: 14px 20px;
+            background: #450a0a;
+            color: #fecaca;
+            border-bottom: 2px solid #b91c1c;
+            font-size: 14px;
+            line-height: 1.45;
+            pointer-events: auto;
+            text-align: center;
         }
 
         .hud-bottom {
@@ -130,6 +157,16 @@
             gap: 5px;
             pointer-events: none;
             z-index: 50;
+        }
+
+        #select-marquee {
+            display: none;
+            position: fixed;
+            border: 2px solid #60a5fa;
+            background: rgba(96, 165, 250, 0.14);
+            box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.5) inset;
+            pointer-events: none;
+            z-index: 180;
         }
 
         .prompt-pill {
@@ -259,6 +296,72 @@
             margin-top: 2px;
         }
 
+        #physics-tune-modal,
+        #sandbox-tool-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 450;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(4px);
+            pointer-events: auto;
+        }
+        #physics-tune-modal[hidden],
+        #sandbox-tool-modal[hidden] { display: none !important; }
+        .physics-tune-panel {
+            width: min(92vw, 380px);
+            padding: 22px 24px;
+            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.98);
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: #f1f5f9;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
+        }
+        .physics-tune-panel h3 { margin: 0 0 6px; font-size: 1.15rem; font-weight: 700; }
+        .physics-tune-target { margin: 0 0 16px; font-size: 0.82rem; opacity: 0.75; line-height: 1.4; }
+        .physics-tune-panel label { display: block; font-size: 0.88rem; margin-bottom: 8px; font-weight: 600; }
+        .physics-tune-panel input[type="range"] { width: 100%; margin: 4px 0 18px; accent-color: #38bdf8; }
+        .physics-tune-value { font-variant-numeric: tabular-nums; color: #7dd3fc; }
+        .physics-tune-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+        .physics-tune-actions button {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(51, 65, 85, 0.9);
+            color: #f8fafc;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+        .physics-tune-actions button:hover { background: rgba(71, 85, 105, 1); }
+        .physics-tune-actions button.primary { background: #2563eb; border-color: #3b82f6; }
+        .physics-tune-actions button.primary:hover { background: #1d4ed8; }
+        .sandbox-tool-panel { display: none; }
+        .sandbox-tool-panel.active { display: block; }
+        .paint-swatches { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+        .paint-swatches button {
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(51, 65, 85, 0.85);
+            color: #e2e8f0;
+            font-size: 0.78rem;
+            cursor: pointer;
+        }
+        .paint-swatches button:hover { background: rgba(71, 85, 105, 1); }
+        .sandbox-row { margin-bottom: 12px; }
+        .sandbox-row input[type="color"] {
+            width: 100%;
+            height: 36px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: transparent;
+        }
+        .sandbox-hint { font-size: 0.8rem; opacity: 0.72; margin: 0 0 12px; line-height: 1.35; }
+
         #controls-panel code {
             font-size: 10px;
             background: rgba(30, 41, 59, 0.9);
@@ -305,18 +408,33 @@
         #controls-reveal-btn.visible {
             display: flex;
         }
+
+        #app-version {
+            position: fixed;
+            top: 10px;
+            right: 12px;
+            z-index: 210;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            color: rgba(226, 232, 240, 0.55);
+            pointer-events: none;
+            user-select: none;
+            font-family: ui-monospace, Consolas, 'Segoe UI', sans-serif;
+        }
     </style>
 </head>
 <body>
+    <div id="boot-error" role="alert" aria-live="assertive"></div>
 
     <aside id="controls-panel" aria-label="Game controls and tutorial">
         <p class="panel-title">Physics Sandbox</p>
-        <p class="panel-sub">Controls stay here while you play. Click the dark overlay center to capture the mouse. Press <kbd>H</kbd> anytime to hide or show this panel.</p>
+        <p class="panel-sub">Controls stay here while you play. Click the dark overlay (or press <kbd>Enter</kbd> / <kbd>Space</kbd>) to capture the mouse. If nothing happens, see the yellow note on the start screen or press <kbd>H</kbd> to hide this panel.</p>
 
         <h2>Start</h2>
         <div class="help-item">
-            <div class="help-keys"><kbd>Click</kbd> center screen</div>
-            <p class="help-desc">Locks the pointer so you look with the mouse. Press <kbd>Esc</kbd> to release the cursor.</p>
+            <div class="help-keys"><kbd>Click</kbd> overlay · <kbd>Enter</kbd> · <kbd>Space</kbd></div>
+            <p class="help-desc">Locks the pointer so you look with the mouse. Press <kbd>Esc</kbd> to release. If the browser blocks capture, open this page in a full tab or use a local server (see the yellow message on the loading screen).</p>
         </div>
 
         <h2>Move &amp; camera</h2>
@@ -326,20 +444,39 @@
         </div>
         <div class="help-item">
             <div class="help-keys"><kbd>Space</kbd></div>
-            <p class="help-desc">Jump when you are on the ground. In ghost mode it moves you up instead.</p>
+            <p class="help-desc">Jump when you are on the ground. With noclip (<kbd>N</kbd> hold) it moves you up instead.</p>
         </div>
         <div class="help-item">
-            <div class="help-keys"><kbd>Ctrl</kbd> <span style="opacity:.6">(left)</span></div>
-            <p class="help-desc">While ghost mode is on, fly downward.</p>
-            <p class="help-tip">Ghost uses no collision so you can pass through objects and the floor.</p>
+            <div class="help-keys"><kbd>Ctrl</kbd> hold</div>
+            <p class="help-desc">While driving the buggy: <strong>boost</strong> — extra engine power. In ghost mode: fly downward. On foot (not ghost) it does nothing.</p>
         </div>
         <div class="help-item">
             <div class="help-keys"><kbd>Shift</kbd> hold</div>
-            <p class="help-desc">Toggle ghost (no-clip) flight while held. Faster than walking.</p>
+            <p class="help-desc">On foot: <strong>ghost</strong> (no-clip) while held — same as <kbd>N</kbd>. In the buggy: <strong>drift</strong> instead; ghost is disabled until you exit the vehicle.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>N</kbd> hold</div>
+            <p class="help-desc">On foot: <strong>ghost</strong> (no-clip) while held — same as <kbd>Shift</kbd>. <kbd>Space</kbd> up, <kbd>Ctrl</kbd> down. <strong>Not available while driving the buggy.</strong></p>
         </div>
         <div class="help-item">
             <div class="help-keys"><kbd>G</kbd></div>
-            <p class="help-desc">Cycles <strong>physics time</strong> only: normal → 20% speed → frozen → normal. Your movement, camera, and grab target stay at full speed; only the physics simulation (objects, ropes, rockets, balloons) scales.</p>
+            <p class="help-desc">Cycles <strong>physics time</strong> only: normal → 20% speed → near-frozen (~2% by default) → normal. Movement and camera stay responsive; the third mode keeps a small timestep for collisions. <strong>Grabs:</strong> letting go or throwing adds real-motion velocity so flicks still work in slow-mo (tune <code>PHYSICS_ALMOST_FROZEN_SCALE</code>, <code>INTERACTION_SLOWMO_REF_SCALE</code>, <code>INTERACTION_SLOWMO_BOOST_CAP</code>).</p>
+        </div>
+
+        <h2>Scene</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Del</kbd> or <kbd>Backspace</kbd></div>
+            <p class="help-desc">Removes every spawned object, debug ropes, and balloon strings. A confirmation pop-up asks first. The floor and your player stay; grab is released if you were holding something.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Wheel click</kbd> · <kbd>J</kbd></div>
+            <p class="help-desc"><strong>Weld:</strong> middle-click toggles a freeze on the dynamic object you are looking at. <kbd>J</kbd> clears all welds. Works whenever the game has captured the mouse.</p>
+        </div>
+
+        <h2>Camera</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>U</kbd></div>
+            <p class="help-desc">Toggles <strong>first person</strong> and <strong>third person</strong> (camera chases behind you; a small character model is drawn in 3rd). Aim and crosshair still follow the view.</p>
         </div>
 
         <h2>Spawn menu</h2>
@@ -351,6 +488,21 @@
             <div class="help-keys"><kbd>E</kbd></div>
             <p class="help-desc">Spawns the selected item at the surface you are aiming at (crosshair). If you aim at empty sky it spawns ahead of you above the ground. Under <strong>Props</strong>, <strong>Balloon (floats)</strong> is a tiny light balloon that drifts and climbs on its own.</p>
         </div>
+
+        <h2>Vehicles</h2>
+        <div class="help-item">
+            <div class="help-keys"><kbd>Props</kbd> → Rideable buggy · <kbd>E</kbd> spawn</div>
+            <p class="help-desc">Spawn a small four-wheel buggy (physics wheels when available). Like Garry’s Mod: it’s a prop you can hop into and drive.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>V</kbd></div>
+            <p class="help-desc">While looking at a nearby buggy, press <kbd>V</kbd> to <strong>mount</strong>. Press <kbd>V</kbd> again to <strong>dismount</strong>. Left and right mouse are disabled while driving so you don’t grab by mistake.</p>
+        </div>
+        <div class="help-item">
+            <div class="help-keys"><kbd>W</kbd> <kbd>S</kbd> · <kbd>A</kbd> <kbd>D</kbd> · <kbd>Space</kbd></div>
+            <p class="help-desc">While mounted: throttle forward/back, steer left/right <strong>relative to the buggy</strong> (not camera strafe). <kbd>Space</kbd> is <strong>brake</strong>. <kbd>Shift</kbd> = drift, <kbd>Ctrl</kbd> = boost.</p>
+        </div>
+        <p class="help-tip">Tuning: <code>BUGGY_MAX_ENGINE</code>, <code>BUGGY_BOOST_ENGINE_MULT</code>, <code>BUGGY_DRIFT_REAR_FRICTION</code>, <code>BUGGY_BRAKE_FORCE</code>, <code>BUGGY_MOUNT_RANGE</code>; fallback: <code>BUGGY_FALLBACK_FORCE</code> / <code>BUGGY_FALLBACK_STEER</code>.</p>
 
         <h2>Grab &amp; throw</h2>
         <div class="help-item">
@@ -369,20 +521,30 @@
         </div>
         <div class="help-item">
             <div class="help-keys"><kbd>Q</kbd> → Debug tab</div>
-            <p class="help-desc"><strong>Move</strong> — click-drag to reposition without the springy constraint.<br>
-            <strong>Resize</strong> — click an object, then scroll the mouse wheel (single box or sphere bodies only).<br>
+            <p class="help-desc"><strong>Select</strong> — box-select (drag empty space) or <kbd>Shift</kbd>/<kbd>Ctrl</kbd>+click to add/remove from selection.<br>
+            <strong>Move</strong> — Roblox-style <strong>red/green/blue arrows</strong> at the selection center: drag an arrow to slide along that world axis (whole selection, including welded).<br>
+            <strong>Rotate</strong> — colored <strong>rings</strong> (X/Y/Z): drag a ring to spin the selection around that axis.<br>
+            <strong>Resize</strong> — click a box or sphere prop: Roblox-style <strong>red/green/blue face handles</strong> drag to stretch X/Y/Z. Scroll = uniform scale. Works on <strong>welded</strong> props (weld stays).<br>
             <strong>Delete</strong> — click an object to remove it.<br>
             <strong>Spawn here</strong> — click a surface to spawn the item you last picked in Shapes/Props/Presets.<br>
             <strong>Balloon gun</strong> — each click adds lift equal to the <strong>default green sphere’s mass</strong> (same “weight,” reversed as buoyancy). A <strong>separate balloon mesh</strong> rises on a <strong>pink string</strong> from the hit point; when the string goes taut it tugs the object upward. <code>BALLOON_POWER</code> in the script scales total lift. When <code>lift × power &gt; mass</code>, the object rises; the extra drives upward acceleration × gravity strength.<br>
-            <strong>Rope gun</strong> — inelastic max length: slack gently draws the ends together; past max length it resists stretch with capped impulses (stable).<br>
-            <strong>Cord gun</strong> — spring toward the length when you fired: pulls when stretched, pushes when compressed, with damping and a safe impulse cap so energy does not blow up.</p>
+            <strong>Rope gun</strong> — fixed max length: it cannot stretch past that distance (bodies are pulled together by mass); slack still draws ends in gently. <code>ROPE_HARD_LENGTH_PASSES</code> and <code>ROPE_IMPULSE_CAP</code> tune it in the script.<br>
+            <strong>Cord gun</strong> — spring toward the length when you fired: pulls when stretched, pushes when compressed, with damping and a safe impulse cap so energy does not blow up.<br>
+            <strong>Hitscan gun</strong> — left click: beam tracer + knockback tuned by <code>DEBUG_GUN_KNOCKBACK</code>; detonates <strong>barrels</strong> and <strong>explosive rockets</strong> on hit.<br>
+            <strong>Rocket launcher</strong> — debug tool: left click fires an <strong>explosive rocket</strong> with thrust already on (timer + impact rules below).<br>
+            <strong>Gravity</strong> — left click the <strong>floor</strong> to set <strong>world</strong> gravity (player + everything). Click a <strong>prop</strong> to set gravity for that object only. Opens a slider menu.<br>
+            <strong>Friction</strong> — same: floor = whole world, prop = that object only.<br>
+            <strong>Paint</strong> — click a prop: color + material menu (presets for wood, metal, glass, neon).<br>
+            <strong>Mass</strong> — click a prop (or one you’re holding with physics grab): mass slider menu.<br>
+            <strong>Ignite</strong> — click a prop: burn time + explode option; <kbd>I</kbd> quick-ignites crosshair target.<br>
+            <strong>Weld</strong> — reminder: middle-click target to freeze or release; <kbd>J</kbd> clears all welds. Select this row for the status hint.</p>
             <p class="help-tip">Switching debug tools or pressing <kbd>0</kbd> cancels an unfinished rope or cord shot.</p>
         </div>
 
         <h2>Rocket &amp; launch pad</h2>
         <div class="help-item">
             <div class="help-keys"><kbd>F</kbd></div>
-            <p class="help-desc">Looks for a rocket under the crosshair and toggles its engine. Thrust pushes along the rocket’s nose until you press <kbd>F</kbd> again on the same rocket. Strength uses <code>ROCKET_THRUST_POWER</code> in the script.</p>
+            <p class="help-desc">Aim at a <strong>rocket</strong> to toggle thrust along its nose. <strong>Explosive rocket</strong>: thrust arms a timer (<code>EXPLOSIVE_ROCKET_FUSE_SEC</code>) and impacts detonate like a barrel (spawned rockets wait <code>EXPLOSIVE_ROCKET_IMPACT_ARM_SEC</code> after arming; <strong>Rocket launcher</strong> shots detonate on first hit). Spawn from <strong>Props</strong> or debug <strong>Rocket launcher</strong>. <strong>Explosive barrel</strong>: same as before. Blasts chain. Tune <code>EXPLOSION_RADIUS</code>, <code>EXPLOSION_IMPULSE</code>, <code>BARREL_IMPACT_EXPLODE_VEL</code>.</p>
         </div>
         <div class="help-item">
             <div class="help-keys">Launch pad</div>
@@ -391,12 +553,12 @@
 
         <h2>Physics tuning</h2>
         <div class="help-item">
-            <p class="help-desc">In the script: <code>BODY_DENSITY</code> scales how heavy objects are from their size, <code>BALLOON_POWER</code> scales balloon lift, <code>ROCKET_THRUST_POWER</code> scales rocket thrust. Rope/cord: <code>ROPE_MAX_STIFFNESS</code>, <code>ROPE_MAX_DAMPING</code>, <code>ROPE_SLACK_PULL_K</code>, <code>ROPE_IMPULSE_CAP</code>, <code>CORD_SPRING_K</code>, <code>CORD_SPRING_C</code>, <code>CORD_IMPULSE_CAP</code>. Buoyancy uses the same gravity strength as the physics world.</p>
+            <p class="help-desc">In the script: <code>BODY_DENSITY</code>, <code>BALLOON_POWER</code>, <code>ROCKET_THRUST_POWER</code>, <code>PHYSICS_ALMOST_FROZEN_SCALE</code>, <code>INTERACTION_SLOWMO_REF_SCALE</code>, <code>INTERACTION_SLOWMO_BOOST_CAP</code>, <code>GRAB_RELEASE_VELOCITY_TRANSFER</code>, <code>THROW_BASE_SPEED</code> (G / grabs). Explosions: <code>EXPLOSION_RADIUS</code>, <code>EXPLOSION_IMPULSE</code>, <code>MAX_EXPLOSION_CHAIN_STEPS</code>. Debris: <code>DEBRIS_LIFETIME_SEC</code> (crate shards + Angry Bird feathers). Debug gun: <code>DEBUG_GUN_KNOCKBACK</code>, <code>DEBUG_GUN_BEAM_RANGE</code>. Explosive rocket: <code>EXPLOSIVE_ROCKET_FUSE_SEC</code>, <code>EXPLOSIVE_ROCKET_IMPACT_ARM_SEC</code>, <code>ROCKET_LAUNCHER_MUZZLE_SPEED</code>. Rope/cord: <code>ROPE_MAX_STIFFNESS</code>, <code>ROPE_MAX_DAMPING</code>, <code>ROPE_SLACK_PULL_K</code>, <code>ROPE_IMPULSE_CAP</code>, <code>ROPE_HARD_LENGTH_PASSES</code>, <code>CORD_SPRING_K</code>, <code>CORD_SPRING_C</code>, <code>CORD_IMPULSE_CAP</code>. Buoyancy uses the same gravity strength as the physics world.</p>
         </div>
 
         <h2>Tips</h2>
         <div class="help-item">
-            <p class="help-desc">Aim at the floor or props to spawn on top of them. Wedge is a solid ramp; use launch pads under balls or crates for big hops. Props include an <strong>NPC</strong> that wanders the floor.</p>
+            <p class="help-desc">Aim at the floor or props to spawn on top of them. <strong>Wedge</strong> is a full 1×1 solid ramp. <strong>Glass</strong> shatters on impact. Debug <strong>Gravity</strong> / <strong>Friction</strong> tools (press <kbd>0</kbd>) let you click the ground or props to tune physics. Props include <strong>NPC</strong>, <strong>buggy</strong> (<kbd>V</kbd>), <strong>barrels</strong> (<kbd>F</kbd>), and more.</p>
         </div>
     </aside>
 
@@ -405,8 +567,60 @@
     <div id="blocker">
         <div class="text-center">
             <h1 class="text-4xl font-bold mb-4">Physics Sandbox</h1>
-            <p class="text-xl opacity-80">Click center to play</p>
+            <p class="text-xl opacity-80">Click here or press <kbd class="px-1 py-0.5 rounded bg-slate-700 border border-slate-500 text-base">Enter</kbd> / <kbd class="px-1 py-0.5 rounded bg-slate-700 border border-slate-500 text-base">Space</kbd> to play</p>
+            <p id="pointer-lock-hint" class="mt-4 text-sm text-amber-200/95 leading-relaxed px-2">The browser blocked mouse capture (common in embedded previews or <code class="text-amber-100">file://</code>). Open this page in a normal tab, or run a tiny server in the project folder: <kbd class="px-1 rounded bg-slate-800">npx --yes serve .</kbd> and open the <code class="text-amber-100">http://localhost:…</code> link.</p>
             <p class="mt-6 text-sm opacity-50 max-w-md mx-auto">Full controls are on the left (press <kbd class="px-1 py-0.5 rounded bg-slate-700 border border-slate-500 text-xs">H</kbd> to hide or show). After you start, use <kbd class="px-1 py-0.5 rounded bg-slate-700 border border-slate-500 text-xs">Esc</kbd> to free the mouse.</p>
+        </div>
+    </div>
+
+    <div id="physics-tune-modal" hidden aria-hidden="true">
+        <div class="physics-tune-panel" role="dialog" aria-labelledby="physics-tune-title">
+            <h3 id="physics-tune-title">Gravity</h3>
+            <p id="physics-tune-target" class="physics-tune-target">World</p>
+            <label id="physics-tune-label">Strength <span class="physics-tune-value" id="physics-tune-value">18</span></label>
+            <input type="range" id="physics-tune-slider" min="0" max="48" step="0.5" value="18">
+            <div class="physics-tune-actions">
+                <button type="button" id="physics-tune-default">Use world default</button>
+                <button type="button" id="physics-tune-cancel">Cancel</button>
+                <button type="button" id="physics-tune-apply" class="primary">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="sandbox-tool-modal" hidden aria-hidden="true">
+        <div class="physics-tune-panel" role="dialog" aria-labelledby="sandbox-tool-title">
+            <h3 id="sandbox-tool-title">Sandbox tool</h3>
+            <p id="sandbox-tool-target" class="physics-tune-target">Object</p>
+            <div id="sandbox-panel-paint" class="sandbox-tool-panel">
+                <p class="sandbox-hint">Recolors every mesh on this prop. Presets set metal/roughness too.</p>
+                <div class="paint-swatches" id="paint-swatches"></div>
+                <div class="sandbox-row">
+                    <label>Color</label>
+                    <input type="color" id="sandbox-paint-color" value="#f87171">
+                </div>
+                <label>Metalness <span class="physics-tune-value" id="sandbox-paint-metal-val">0.2</span></label>
+                <input type="range" id="sandbox-paint-metal" min="0" max="1" step="0.05" value="0.2">
+                <label>Roughness <span class="physics-tune-value" id="sandbox-paint-rough-val">0.55</span></label>
+                <input type="range" id="sandbox-paint-rough" min="0" max="1" step="0.05" value="0.55">
+            </div>
+            <div id="sandbox-panel-mass" class="sandbox-tool-panel">
+                <p class="sandbox-hint">Changes physics weight only (not size). Heavier objects hit harder.</p>
+                <label>Mass (kg) <span class="physics-tune-value" id="sandbox-mass-val">10</span></label>
+                <input type="range" id="sandbox-mass-slider" min="0.2" max="400" step="0.5" value="10">
+            </div>
+            <div id="sandbox-panel-ignite" class="sandbox-tool-panel">
+                <p class="sandbox-hint">Lights the prop on fire. Barrels/rockets explode immediately. Others can explode when burn ends.</p>
+                <label>Burn time (sec) <span class="physics-tune-value" id="sandbox-ignite-time-val">3</span></label>
+                <input type="range" id="sandbox-ignite-time" min="0.5" max="12" step="0.5" value="3">
+                <label class="sandbox-row" style="font-weight:500;display:flex;align-items:center;gap:8px;">
+                    <input type="checkbox" id="sandbox-ignite-explode" checked>
+                    Explode when burn finishes
+                </label>
+            </div>
+            <div class="physics-tune-actions">
+                <button type="button" id="sandbox-tool-cancel">Cancel</button>
+                <button type="button" id="sandbox-tool-apply" class="primary">Apply</button>
+            </div>
         </div>
     </div>
 
@@ -421,6 +635,8 @@
     </div>
 
     <div id="crosshair"></div>
+    <div id="select-marquee"></div>
+    <div id="app-version" aria-live="polite"></div>
 
     <div class="hud-bottom">
         <div id="status-display" class="status-pill mb-2">Sandbox Mode: Active</div>
@@ -430,13 +646,17 @@
     </div>
 
     <script>
+        /** Shown in the top-right corner; bump when you ship changes players should notice. */
+        const APP_VERSION = '1.9.0';
+
         const menuData = {
             shapes: [
                 { id: 'box', name: 'Cube', icon: '📦', height: 1 },
                 { id: 'sphere', name: 'Sphere', icon: '⚽', height: 1.2 },
                 { id: 'pillar', name: 'Pillar', icon: '🏛️', height: 3 },
                 { id: 'platform', name: 'Platform', icon: '📏', height: 0.3 },
-                { id: 'wedge', name: 'Wedge/Ramp', icon: '📐', height: 1.5 },
+                { id: 'wedge', name: 'Wedge/Ramp', icon: '📐', height: 1 },
+                { id: 'glass', name: 'Glass (shatters)', icon: '🪟', height: 1 },
                 { id: 'bouncer', name: 'Launch Pad', icon: '🚀', height: 0.4 }
             ],
             props: [
@@ -447,8 +667,11 @@
                 { id: 'ball', name: 'Giant Ball', icon: '🏐', height: 3 },
                 { id: 'crate', name: 'Destructible Crate', icon: '🗄️', height: 1 },
                 { id: 'rocket', name: 'Rocket (F thrust)', icon: '🛰️', height: 1.2 },
+                { id: 'explosive_rocket', name: 'Explosive rocket (F)', icon: '💥', height: 1.2 },
                 { id: 'free_balloon', name: 'Balloon (floats)', icon: '🎈', height: 0.55 },
-                { id: 'npc', name: 'NPC (wanders)', icon: '🙂', height: 1.85 }
+                { id: 'npc', name: 'NPC (wanders)', icon: '🙂', height: 1.85 },
+                { id: 'buggy', name: 'Rideable buggy', icon: '🚙', height: 1.1 },
+                { id: 'explosive_barrel', name: 'Barrel (F / blast)', icon: '🛢️', height: 0.95 }
             ],
             presets: [
                 { id: 'ab_level', name: 'Angry Bird Level', icon: '🏰', height: 10 },
@@ -458,13 +681,23 @@
                 { id: 'mega_tower', name: 'Mega Tower', icon: '🏰', height: 30 }
             ],
             debug: [
-                { id: 'move', name: 'Move (drag)', icon: '✋' },
-                { id: 'resize', name: 'Resize (pick + wheel)', icon: '📏' },
+                { id: 'select', name: 'Select', icon: '⬚' },
+                { id: 'move', name: 'Move (axis arrows)', icon: '✋' },
+                { id: 'rotate', name: 'Rotate (rings)', icon: '🔄' },
+                { id: 'resize', name: 'Resize (axis handles)', icon: '📏' },
                 { id: 'delete', name: 'Delete (click)', icon: '🗑️' },
                 { id: 'spawn', name: 'Spawn here (click)', icon: '✨' },
                 { id: 'balloon', name: 'Balloon gun', icon: '🎈' },
                 { id: 'rope', name: 'Rope gun', icon: '🪢' },
-                { id: 'cord', name: 'Cord gun', icon: '🔗' }
+                { id: 'cord', name: 'Cord gun', icon: '🔗' },
+                { id: 'gun', name: 'Hitscan gun', icon: '🔫' },
+                { id: 'rocket_launcher', name: 'Rocket launcher', icon: '🚀' },
+                { id: 'gravity', name: 'Gravity (click)', icon: '🌍' },
+                { id: 'friction', name: 'Friction (click)', icon: '🧊' },
+                { id: 'paint', name: 'Paint (click)', icon: '🎨' },
+                { id: 'mass', name: 'Mass (click)', icon: '⚖️' },
+                { id: 'ignite', name: 'Ignite (click)', icon: '🔥' },
+                { id: 'weld', name: 'Weld (M-click, J clear)', icon: '⛓️' }
             ]
         };
 
@@ -477,7 +710,9 @@
         const ROPE_MAX_DAMPING = 11;
         const ROPE_SLACK_PULL_K = 6.5;
         const ROPE_SLACK_PULL_C = 2.2;
-        const ROPE_IMPULSE_CAP = 14;
+        const ROPE_IMPULSE_CAP = 28;
+        /** Rope: after impulses, positions are projected so length never exceeds max (weighted by invMass). */
+        const ROPE_HARD_LENGTH_PASSES = 2;
         /** Cord: bidirectional spring + damping toward rest length (stable). */
         const CORD_SPRING_K = 28;
         const CORD_SPRING_C = 9;
@@ -489,6 +724,70 @@
         const BALLOON_POWER = 1.15;
         /** Multiplies rocket thrust along its nose. */
         const ROCKET_THRUST_POWER = 1.1;
+        /** <kbd>G</kbd> third mode: physics timestep as a fraction of real time (still “slow mo”; higher = harder hits & better grabs). */
+        const PHYSICS_ALMOST_FROZEN_SCALE = 0.022;
+        /** Below this sim scale, throws & grab releases get boosted toward real-world speed (see cap). */
+        const INTERACTION_SLOWMO_REF_SCALE = 0.06;
+        const INTERACTION_SLOWMO_BOOST_CAP = 42;
+        const GRAB_RELEASE_VELOCITY_TRANSFER = 0.92;
+        const THROW_BASE_SPEED = 50;
+        /** Default world gravity magnitude (down). */
+        const BASE_GRAVITY = 18;
+        /** Default prop-on-prop friction. */
+        const BASE_WORLD_FRICTION = 0.35;
+        const GLASS_SHATTER_IMPULSE = 4.5;
+        const IGNITE_DEFAULT_BURN_SEC = 3;
+        const RESIZE_MIN_HALF = 0.08;
+        const RESIZE_MAX_HALF = 24;
+        const PAINT_PRESETS = [
+            { name: 'Wood', color: '#92400e', metal: 0.05, rough: 0.82 },
+            { name: 'Metal', color: '#94a3b8', metal: 0.72, rough: 0.28 },
+            { name: 'Plastic', color: '#f472b6', metal: 0.08, rough: 0.42 },
+            { name: 'Glass', color: '#bae6fd', metal: 0.12, rough: 0.08 },
+            { name: 'Neon', color: '#22ff88', metal: 0.15, rough: 0.35 },
+            { name: 'Rust', color: '#b45309', metal: 0.35, rough: 0.78 }
+        ];
+        /** Player rigid-body mass (kg). Lower = lighter; also reduces sideways shove on props you stand on. */
+        const PLAYER_MASS = 42;
+        /** Half-height of player physics box (flat feet — weight lands on tops, less sphere roll-off torque). */
+        const PLAYER_HALF_HEIGHT = 0.42;
+        /** Eye height above player body center (first- and third-person pivot). */
+        const FIRST_PERSON_EYE_Y = 0.5;
+        /** Chase distance behind look direction in third person. */
+        const THIRD_PERSON_DISTANCE = 4.35;
+        /** Radial blast radius and impulse scale for explosive barrels. */
+        const EXPLOSION_RADIUS = 7.2;
+        const EXPLOSION_IMPULSE = 310;
+        /** Extra knockback for debug hitscan gun (velocity += dir × this / mass). */
+        const DEBUG_GUN_KNOCKBACK = 175;
+        const DEBUG_GUN_BEAM_RANGE = 110;
+        const DEBUG_GUN_BEAM_LIFE = 0.09;
+        /** Explosive rocket: auto-detonates this many seconds after thrust is turned on. */
+        const EXPLOSIVE_ROCKET_FUSE_SEC = 4;
+        /** Non–rocket-launcher explosive rockets: impact fuse waits this long after thrust arms (launcher shots use instant impact). */
+        const EXPLOSIVE_ROCKET_IMPACT_ARM_SEC = 1;
+        /** Initial speed for rockets fired from the debug rocket launcher. */
+        const ROCKET_LAUNCHER_MUZZLE_SPEED = 46;
+        /** Impact speed along contact normal to detonate a barrel (hits / throws). */
+        const BARREL_IMPACT_EXPLODE_VEL = 8.5;
+        const MAX_EXPLOSION_CHAIN_STEPS = 28;
+        /** Crate shards and Angry Bird feathers vanish after this many seconds. */
+        const DEBRIS_LIFETIME_SEC = 3;
+        /** Cannon RaycastVehicle rideable (GMod-style): engine / rear wheels, steer front, Space brake, V mount. */
+        const BUGGY_MAX_ENGINE = 380;
+        const BUGGY_MAX_STEER = 0.42;
+        const BUGGY_BRAKE_FORCE = 38;
+        /** Extra engine multiplier while Ctrl is held (raycast + fallback). */
+        const BUGGY_BOOST_ENGINE_MULT = 1.75;
+        /** Default wheel friction; re-applied when not drifting. */
+        const BUGGY_WHEEL_FRIC_NORMAL = 2.05;
+        /** Low rear-axle friction while Shift drift is held (front wheels stay grippier). */
+        const BUGGY_DRIFT_REAR_FRICTION = 0.38;
+        const BUGGY_DRIFT_FRONT_FRICTION = 1.05;
+        const BUGGY_MOUNT_RANGE = 5.2;
+        /** If RaycastVehicle missing from build: simple box drive. */
+        const BUGGY_FALLBACK_FORCE = 24000;
+        const BUGGY_FALLBACK_STEER = 0.11;
         /** Default play sphere radius — balloon adds lift equal to this sphere's mass (weight reversed as buoyancy). */
         const REFERENCE_SPHERE_RADIUS = 0.6;
 
@@ -532,30 +831,214 @@
             const extra = GROUND_EPS;
             const t = {
                 box: 0.5, sphere: 0.6, ball: 1.5, pillar: 1.5, platform: 0.15,
-                wedge: 1.05, bouncer: 0.22, basketball_hoop: 2.5, angry_bird: 0.35,
+                wedge: 1.05, glass: 0.55, bouncer: 0.22, basketball_hoop: 2.5, angry_bird: 0.35,
                 domino: 1.5, crate: 0.5, duck: 0.55,
-                rocket: 0.95, free_balloon: 0.35, npc: 0.95, bridge: 2, dominoes: 1.5, tower: 2, mega_tower: 3, ab_level: 3
+                rocket: 0.95, explosive_rocket: 0.95, free_balloon: 0.35, npc: 0.95, buggy: 1.05, explosive_barrel: 0.52,
+                bridge: 2, dominoes: 1.5, tower: 2, mega_tower: 3, ab_level: 3
             };
             return (t[type] != null ? t[type] : 0.55) + extra;
         }
 
-        function makeWedgeConvex() {
+        function queueBarrelDetonation(phyObj) {
+            if (!phyObj || phyObj._bangQueued) return;
+            phyObj._bangQueued = true;
+            barrelDetonateQueue.push(phyObj);
+        }
+
+        function spawnExplosionVisual(pos) {
+            if (!scene) return;
+            const p = pos instanceof CANNON.Vec3 ? pos : new CANNON.Vec3(pos.x, pos.y, pos.z);
+            const geom = new THREE.SphereGeometry(0.35, 14, 14);
+            const mat = new THREE.MeshBasicMaterial({
+                color: 0xff9933,
+                transparent: true,
+                opacity: 0.9,
+                depthWrite: false
+            });
+            const mesh = new THREE.Mesh(geom, mat);
+            mesh.position.set(p.x, p.y, p.z);
+            scene.add(mesh);
+            const light = new THREE.PointLight(0xffaa44, 3.2, 26, 1.8);
+            light.position.copy(mesh.position);
+            scene.add(light);
+            activeExplosionFX.push({ mesh, light, t: 0, life: 0.48 });
+        }
+
+        function updateExplosionFX(frameDt) {
+            for (let i = activeExplosionFX.length - 1; i >= 0; i--) {
+                const fx = activeExplosionFX[i];
+                fx.t += frameDt;
+                const k = Math.min(fx.t / fx.life, 1);
+                const scale = 1 + k * 22;
+                fx.mesh.scale.setScalar(scale);
+                fx.mesh.material.opacity = Math.max(0, 0.9 * (1 - k));
+                fx.light.intensity = 3.2 * (1 - k);
+                if (fx.t >= fx.life) {
+                    scene.remove(fx.mesh);
+                    scene.remove(fx.light);
+                    fx.mesh.geometry.dispose();
+                    fx.mesh.material.dispose();
+                    activeExplosionFX.splice(i, 1);
+                }
+            }
+        }
+
+        function addDebugGunBeam(hitPointWorld) {
+            if (!scene || !camera) return;
+            const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+            const start = camera.position.clone().addScaledVector(dir, 0.34);
+            const end = hitPointWorld
+                ? hitPointWorld.clone()
+                : camera.position.clone().addScaledVector(dir, DEBUG_GUN_BEAM_RANGE);
+            const geom = new THREE.BufferGeometry().setFromPoints([start, end]);
+            const mat = new THREE.LineBasicMaterial({
+                color: 0x7dd3fd,
+                transparent: true,
+                opacity: 0.94,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            const line = new THREE.Line(geom, mat);
+            scene.add(line);
+            activeGunBeams.push({ line, t: 0, life: DEBUG_GUN_BEAM_LIFE });
+        }
+
+        function updateGunBeams(frameDt) {
+            for (let i = activeGunBeams.length - 1; i >= 0; i--) {
+                const g = activeGunBeams[i];
+                g.t += frameDt;
+                if (g.line.material) g.line.material.opacity = 0.94 * Math.max(0, 1 - g.t / g.life);
+                if (g.t >= g.life) {
+                    if (scene && g.line) scene.remove(g.line);
+                    if (g.line.geometry) g.line.geometry.dispose();
+                    if (g.line.material) g.line.material.dispose();
+                    activeGunBeams.splice(i, 1);
+                }
+            }
+        }
+
+        function blastImpulseAt(pos) {
+            objectsToUpdate.forEach(o => {
+                if (!o.body || o.body.mass <= 0) return;
+                const dx = o.body.position.x - pos.x;
+                const dy = o.body.position.y - pos.y;
+                const dz = o.body.position.z - pos.z;
+                const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (d > EXPLOSION_RADIUS) return;
+                weldedObjects.delete(o);
+                let nx = dx, ny = dy, nz = dz;
+                if (d < 0.04) {
+                    nx = 0; ny = 1; nz = 0;
+                } else {
+                    const invd = 1 / d;
+                    nx *= invd; ny *= invd; nz *= invd;
+                }
+                const fall = 1 - d / EXPLOSION_RADIUS;
+                const imp = EXPLOSION_IMPULSE * fall * fall;
+                const m = Math.max(o.body.mass, 0.01);
+                o.body.velocity.x += nx * imp / m;
+                o.body.velocity.y += ny * imp / m;
+                o.body.velocity.z += nz * imp / m;
+            });
+            if (playerBody && playerBody.mass > 0 && !isGhostMode) {
+                const dx = playerBody.position.x - pos.x;
+                const dy = playerBody.position.y - pos.y;
+                const dz = playerBody.position.z - pos.z;
+                const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (d <= EXPLOSION_RADIUS && d >= 1e-4) {
+                    const invd = 1 / d;
+                    const nx = dx * invd, ny = dy * invd, nz = dz * invd;
+                    const fall = 1 - d / EXPLOSION_RADIUS;
+                    const imp = EXPLOSION_IMPULSE * fall * fall;
+                    const m = Math.max(playerBody.mass, 0.01);
+                    playerBody.velocity.x += nx * imp / m;
+                    playerBody.velocity.y += ny * imp / m;
+                    playerBody.velocity.z += nz * imp / m;
+                }
+            }
+        }
+
+        function triggerExplosionChain(pos) {
+            if (!world) return;
+            const frontier = [];
+            if (pos instanceof CANNON.Vec3) frontier.push(pos.clone());
+            else frontier.push(new CANNON.Vec3(pos.x, pos.y, pos.z));
+            let steps = 0;
+            while (frontier.length && steps < MAX_EXPLOSION_CHAIN_STEPS) {
+                const p = frontier.shift();
+                steps++;
+                spawnExplosionVisual(p);
+                const barrels = [];
+                for (let i = 0; i < objectsToUpdate.length; i++) {
+                    const o = objectsToUpdate[i];
+                    if ((o.type !== 'explosive_barrel' && o.type !== 'explosive_rocket') || !o.body || o.body.mass <= 0) continue;
+                    if (o.body.position.distanceTo(p) <= EXPLOSION_RADIUS) barrels.push(o);
+                }
+                blastImpulseAt(p);
+                for (let i = 0; i < barrels.length; i++) {
+                    const b = barrels[i];
+                    if (objectsToUpdate.indexOf(b) < 0) continue;
+                    const np = b.body.position.clone();
+                    removeObject(b);
+                    frontier.push(np);
+                }
+            }
+        }
+
+        /**
+         * Solid right-triangle wedge in a 1×1×1 cube (same footprint as the cube prop).
+         * Low edge at +X, tall edge at −X — GMod-style ramp for stacking rows.
+         */
+        function makeUnitWedgeData() {
+            const h = 0.5;
             const verts = [
-                new CANNON.Vec3(0, 0, -1), new CANNON.Vec3(2, 0, -1), new CANNON.Vec3(2, 0, 1), new CANNON.Vec3(0, 0, 1),
-                new CANNON.Vec3(0, 1.2, -1), new CANNON.Vec3(0, 1.2, 1)
+                new CANNON.Vec3(-h, -h, -h),
+                new CANNON.Vec3(h, -h, -h),
+                new CANNON.Vec3(h, -h, h),
+                new CANNON.Vec3(-h, -h, h),
+                new CANNON.Vec3(-h, h, -h),
+                new CANNON.Vec3(-h, h, h)
             ];
-            let cx = 0, cy = 0, cz = 0;
-            verts.forEach(v => { cx += v.x; cy += v.y; cz += v.z; });
-            cx /= verts.length; cy /= verts.length; cz /= verts.length;
-            verts.forEach(v => { v.x -= cx; v.y -= cy; v.z -= cz; });
             const faces = [
-                [0, 3, 2], [0, 2, 1],
-                [1, 2, 5], [1, 5, 4],
+                [0, 3, 2, 1],
+                [0, 4, 5, 3],
                 [0, 1, 4],
                 [3, 5, 2],
-                [0, 4, 5], [0, 5, 3]
+                [4, 5, 2, 1]
             ];
-            return { verts, faces };
+            const positions = [];
+            verts.forEach(v => { positions.push(v.x, v.y, v.z); });
+            const indices = [
+                0, 3, 2, 0, 2, 1,
+                0, 4, 5, 0, 5, 3,
+                0, 1, 4,
+                3, 5, 2,
+                4, 5, 2, 4, 2, 1
+            ];
+            return { verts, faces, positions, indices, minY: -h, halfExtents: h };
+        }
+
+        function shatterPhysicsObject(phy, shardType, shardCount) {
+            if (!phy || !phy.body) return;
+            const pos = phy.body.position.clone();
+            const vel = phy.body.velocity.clone();
+            removeObject(phy);
+            for (let i = 0; i < shardCount; i++) {
+                createPhysicsObject(shardType, new CANNON.Vec3(
+                    pos.x + (Math.random() - 0.5) * 0.65,
+                    pos.y + (Math.random() - 0.5) * 0.65,
+                    pos.z + (Math.random() - 0.5) * 0.65
+                ), vel);
+            }
+        }
+
+        function attachGlassShatterListener(body) {
+            body.addEventListener('collide', (e) => {
+                const impulse = Math.abs(e.contact.getImpactVelocityAlongNormal());
+                if (impulse < GLASS_SHATTER_IMPULSE) return;
+                const currentObj = objectsToUpdate.find(o => o.body === body);
+                if (currentObj && currentObj.type === 'glass') shatterPhysicsObject(currentObj, 'glass_shard', 8);
+            });
         }
 
         function attachLaunchPadImpulse(body) {
@@ -576,14 +1059,474 @@
         }
 
         function getSimTimeScale() {
-            return timeMode === 0 ? 1 : timeMode === 1 ? 0.2 : 0;
+            return timeMode === 0 ? 1 : timeMode === 1 ? 0.2 : PHYSICS_ALMOST_FROZEN_SCALE;
+        }
+
+        function interactionSlowMoBoostMul() {
+            const s = getSimTimeScale();
+            if (s >= INTERACTION_SLOWMO_REF_SCALE) return 1;
+            return Math.min(INTERACTION_SLOWMO_BOOST_CAP, INTERACTION_SLOWMO_REF_SCALE / Math.max(s, 1e-6));
+        }
+
+        function applyGrabReleaseFlick(obj) {
+            if (!obj || !obj.body || obj.body.mass <= 0) return;
+            if (grabRodVelocity.lengthSq() < 0.004) return;
+            const mul = interactionSlowMoBoostMul() * GRAB_RELEASE_VELOCITY_TRANSFER;
+            obj.body.velocity.x += grabRodVelocity.x * mul;
+            obj.body.velocity.y += grabRodVelocity.y * mul;
+            obj.body.velocity.z += grabRodVelocity.z * mul;
         }
 
         function updateTimeHud() {
             const el = document.getElementById('time-hud');
             if (!el) return;
-            const labels = ['Physics: Normal', 'Physics: Slow (20%)', 'Physics: Frozen'];
+            const labels = ['Physics: Normal', 'Physics: Slow (20%)', `Physics: Near-frozen (~${(PHYSICS_ALMOST_FROZEN_SCALE * 100).toFixed(3)}% speed)`];
             el.textContent = labels[timeMode];
+        }
+
+        function applyWorldPhysicsSettings() {
+            if (world) world.gravity.set(0, -worldGravityMag, 0);
+            if (defaultContactMaterial) defaultContactMaterial.friction = worldFriction;
+            if (cmPlayerFloor) cmPlayerFloor.friction = Math.min(1.25, worldFriction * 1.45);
+        }
+
+        function applyCustomGravityForces() {
+            if (!world) return;
+            const gWorldY = world.gravity.y;
+            objectsToUpdate.forEach(o => {
+                if (!o.body || o.body.mass <= 0 || o.customGravityMag == null) return;
+                const wantY = -Math.abs(o.customGravityMag);
+                o.body.force.y += o.body.mass * (wantY - gWorldY);
+            });
+        }
+
+        const frictionMaterialCache = new Map();
+
+        function setBodyFriction(body, friction) {
+            if (!body || !world) return;
+            if (friction == null) {
+                body.material = null;
+                return;
+            }
+            const f = Math.max(0.02, Math.min(2, friction));
+            const key = f.toFixed(3);
+            if (!frictionMaterialCache.has(key)) {
+                const mat = new CANNON.Material('surf_fric_' + key);
+                world.addContactMaterial(new CANNON.ContactMaterial(mat, defaultContactMaterial, {
+                    friction: f,
+                    restitution: 0.28
+                }));
+                world.addContactMaterial(new CANNON.ContactMaterial(mat, floorMaterial, {
+                    friction: Math.min(1.3, f * 1.4),
+                    restitution: 0
+                }));
+                if (bouncerMaterial) {
+                    world.addContactMaterial(new CANNON.ContactMaterial(mat, bouncerMaterial, {
+                        friction: Math.min(0.35, f * 0.4),
+                        restitution: 1.1
+                    }));
+                }
+                frictionMaterialCache.set(key, mat);
+            }
+            body.material = frictionMaterialCache.get(key);
+        }
+
+        let physicsTunePending = null;
+        let sandboxToolPending = null;
+        let floorVisualMesh = null;
+
+        function isDebugMenuOpen() {
+            return !!(physicsTunePending || sandboxToolPending);
+        }
+
+        function pickSurfaceAtCrosshair() {
+            if (!raycaster || !camera) return null;
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects(spawnableMeshes, true);
+            if (!hits.length) return null;
+            const hit = hits[0];
+            let isFloor = false;
+            if (floorVisualMesh) {
+                let node = hit.object;
+                while (node) {
+                    if (node === floorVisualMesh) { isFloor = true; break; }
+                    node = node.parent;
+                }
+            }
+            let obj = null;
+            if (!isFloor) {
+                objectsToUpdate.forEach(p => {
+                    p.mesh.traverse(c => { if (c === hit.object) obj = p; });
+                    if (p.mesh === hit.object) obj = p;
+                });
+            }
+            return { hit, isFloor, obj };
+        }
+
+        function refreshPhysicsTuneSliderDisplay() {
+            const slider = document.getElementById('physics-tune-slider');
+            const valEl = document.getElementById('physics-tune-value');
+            if (slider && valEl) valEl.textContent = parseFloat(slider.value).toFixed(slider.step < 0.1 ? 2 : 1);
+        }
+
+        function openPhysicsTuneModal(kind, scope, obj) {
+            physicsTunePending = { kind, scope, obj: obj || null };
+            const modal = document.getElementById('physics-tune-modal');
+            const title = document.getElementById('physics-tune-title');
+            const target = document.getElementById('physics-tune-target');
+            const slider = document.getElementById('physics-tune-slider');
+            const label = document.getElementById('physics-tune-label');
+            const defBtn = document.getElementById('physics-tune-default');
+            if (!modal || !slider || !title) return;
+            let v;
+            if (kind === 'gravity') {
+                title.textContent = 'Gravity';
+                if (label) label.childNodes[0].textContent = 'Gravity strength (down) ';
+                slider.min = '0';
+                slider.max = '48';
+                slider.step = '0.5';
+                v = scope === 'object' && obj && obj.customGravityMag != null
+                    ? obj.customGravityMag
+                    : worldGravityMag;
+            } else {
+                title.textContent = 'Friction';
+                if (label) label.childNodes[0].textContent = 'Surface friction ';
+                slider.min = '0.02';
+                slider.max = '2';
+                slider.step = '0.02';
+                v = scope === 'object' && obj && obj.customFriction != null
+                    ? obj.customFriction
+                    : worldFriction;
+            }
+            slider.value = String(v);
+            refreshPhysicsTuneSliderDisplay();
+            if (target) {
+                target.textContent = scope === 'world'
+                    ? 'World — player, floor, and all props without their own override'
+                    : `This object (${obj.type || 'prop'}) only`;
+            }
+            if (defBtn) defBtn.style.display = scope === 'object' ? 'inline-block' : 'none';
+            modal.hidden = false;
+            modal.setAttribute('aria-hidden', 'false');
+            if (controls && controls.isLocked) controls.unlock();
+        }
+
+        function closePhysicsTuneModal(relock) {
+            const modal = document.getElementById('physics-tune-modal');
+            if (modal) {
+                modal.hidden = true;
+                modal.setAttribute('aria-hidden', 'true');
+            }
+            physicsTunePending = null;
+            if (relock && controls && !isMenuOpen) {
+                setTimeout(() => { try { controls.lock(); } catch (err) {} }, 100);
+            }
+        }
+
+        function applyPhysicsTuneModal() {
+            if (!physicsTunePending) return;
+            const slider = document.getElementById('physics-tune-slider');
+            const v = parseFloat(slider.value);
+            const { kind, scope, obj } = physicsTunePending;
+            if (kind === 'gravity') {
+                if (scope === 'world') {
+                    worldGravityMag = v;
+                    applyWorldPhysicsSettings();
+                } else if (obj) {
+                    obj.customGravityMag = v;
+                }
+            } else if (scope === 'world') {
+                worldFriction = v;
+                applyWorldPhysicsSettings();
+            } else if (obj) {
+                obj.customFriction = v;
+                setBodyFriction(obj.body, v);
+            }
+            closePhysicsTuneModal(true);
+            updateDragModeHud();
+        }
+
+        function resetPhysicsTuneToWorldDefault() {
+            if (!physicsTunePending || physicsTunePending.scope !== 'object' || !physicsTunePending.obj) return;
+            const o = physicsTunePending.obj;
+            if (physicsTunePending.kind === 'gravity') o.customGravityMag = null;
+            else {
+                o.customFriction = null;
+                if (o.body) o.body.material = null;
+            }
+            closePhysicsTuneModal(true);
+        }
+
+        function initPhysicsTuneModal() {
+            const modal = document.getElementById('physics-tune-modal');
+            const panel = modal && modal.querySelector('.physics-tune-panel');
+            const slider = document.getElementById('physics-tune-slider');
+            const applyBtn = document.getElementById('physics-tune-apply');
+            const cancelBtn = document.getElementById('physics-tune-cancel');
+            const defBtn = document.getElementById('physics-tune-default');
+            if (slider) slider.addEventListener('input', refreshPhysicsTuneSliderDisplay);
+            if (applyBtn) applyBtn.addEventListener('click', applyPhysicsTuneModal);
+            if (cancelBtn) cancelBtn.addEventListener('click', () => closePhysicsTuneModal(true));
+            if (defBtn) defBtn.addEventListener('click', resetPhysicsTuneToWorldDefault);
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closePhysicsTuneModal(true);
+                });
+            }
+            if (panel) panel.addEventListener('click', (e) => e.stopPropagation());
+        }
+
+        function applyPaintToObject(phy, hexColor, metalness, roughness) {
+            if (!phy || !phy.mesh) return;
+            const col = new THREE.Color(hexColor);
+            phy.mesh.traverse(child => {
+                if (!child.isMesh || !child.material) return;
+                const applyOne = (m) => {
+                    const nm = m.clone();
+                    if (nm.color) nm.color.copy(col);
+                    if (typeof nm.metalness === 'number') nm.metalness = metalness;
+                    if (typeof nm.roughness === 'number') nm.roughness = roughness;
+                    if (nm.emissive && !phy.igniteUntil) {
+                        nm.emissive.setHex(0x000000);
+                        if (typeof nm.emissiveIntensity === 'number') nm.emissiveIntensity = 0;
+                    }
+                    if (nm.transparent && phy.type === 'glass') nm.opacity = Math.max(nm.opacity, 0.35);
+                    return nm;
+                };
+                if (Array.isArray(child.material)) {
+                    child.material = child.material.map(applyOne);
+                } else {
+                    child.material = applyOne(child.material);
+                }
+            });
+            phy.paintColor = hexColor;
+            phy.paintMetal = metalness;
+            phy.paintRough = roughness;
+        }
+
+        function setObjectMass(phy, massKg) {
+            if (!phy || !phy.body || phy.body.mass <= 0) return;
+            const m = Math.max(0.1, massKg);
+            phy.body.mass = m;
+            phy.body.updateMassProperties();
+            refreshMassLabel(phy);
+        }
+
+        function attachIgniteFx(phy) {
+            if (!phy || !phy.mesh || phy._igniteLight) return;
+            const light = new THREE.PointLight(0xff6b35, 1.1, 5.5);
+            light.position.set(0, 0.35, 0);
+            phy.mesh.add(light);
+            phy._igniteLight = light;
+        }
+
+        function clearIgniteFx(phy) {
+            if (!phy) return;
+            if (phy._igniteLight && phy.mesh) {
+                phy.mesh.remove(phy._igniteLight);
+                phy._igniteLight = null;
+            }
+            phy.igniteUntil = null;
+            phy.mesh && phy.mesh.traverse(child => {
+                if (!child.isMesh || !child.material) return;
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach(m => {
+                    if (m.emissive) {
+                        m.emissive.setHex(0x000000);
+                        if (typeof m.emissiveIntensity === 'number') m.emissiveIntensity = 0;
+                    }
+                });
+            });
+        }
+
+        function igniteObject(phy, burnSec, explodeWhenDone) {
+            if (!phy || !phy.body || phy.body.mass <= 0) return;
+            if (phy.type === 'explosive_barrel' || phy.type === 'explosive_rocket') {
+                queueBarrelDetonation(phy);
+                return;
+            }
+            const sec = Math.max(0.25, burnSec || IGNITE_DEFAULT_BURN_SEC);
+            phy.igniteUntil = performance.now() / 1000 + sec;
+            phy.igniteDetonate = explodeWhenDone !== false;
+            attachIgniteFx(phy);
+            phy.mesh.traverse(child => {
+                if (!child.isMesh || !child.material) return;
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach(m => {
+                    if (m.emissive) {
+                        m.emissive.setHex(0xff4500);
+                        if (typeof m.emissiveIntensity === 'number') m.emissiveIntensity = 0.55;
+                    }
+                });
+            });
+        }
+
+        function updateIgniteStates() {
+            const now = performance.now() / 1000;
+            for (let i = objectsToUpdate.length - 1; i >= 0; i--) {
+                const o = objectsToUpdate[i];
+                if (!o.igniteUntil) continue;
+                if (o._igniteLight) {
+                    o._igniteLight.intensity = 0.75 + 0.45 * Math.sin(now * 14);
+                }
+                if (now >= o.igniteUntil) {
+                    const p = o.body.position.clone();
+                    const det = o.igniteDetonate;
+                    clearIgniteFx(o);
+                    if (det) {
+                        removeObject(o);
+                        triggerExplosionChain(p);
+                    }
+                }
+            }
+        }
+
+        function refreshSandboxMassDisplay() {
+            const slider = document.getElementById('sandbox-mass-slider');
+            const valEl = document.getElementById('sandbox-mass-val');
+            if (slider && valEl) valEl.textContent = parseFloat(slider.value).toFixed(1);
+        }
+
+        function refreshSandboxPaintDisplays() {
+            const metal = document.getElementById('sandbox-paint-metal');
+            const rough = document.getElementById('sandbox-paint-rough');
+            const mVal = document.getElementById('sandbox-paint-metal-val');
+            const rVal = document.getElementById('sandbox-paint-rough-val');
+            if (metal && mVal) mVal.textContent = parseFloat(metal.value).toFixed(2);
+            if (rough && rVal) rVal.textContent = parseFloat(rough.value).toFixed(2);
+        }
+
+        function refreshSandboxIgniteDisplay() {
+            const slider = document.getElementById('sandbox-ignite-time');
+            const valEl = document.getElementById('sandbox-ignite-time-val');
+            if (slider && valEl) valEl.textContent = parseFloat(slider.value).toFixed(1);
+        }
+
+        function showSandboxToolPanel(tool) {
+            ['paint', 'mass', 'ignite'].forEach(t => {
+                const el = document.getElementById('sandbox-panel-' + t);
+                if (el) el.classList.toggle('active', t === tool);
+            });
+        }
+
+        function openSandboxToolModal(tool, obj) {
+            if (!obj || !obj.body || obj.body.mass <= 0) return;
+            sandboxToolPending = { tool, obj };
+            const modal = document.getElementById('sandbox-tool-modal');
+            const title = document.getElementById('sandbox-tool-title');
+            const target = document.getElementById('sandbox-tool-target');
+            if (!modal || !title) return;
+            showSandboxToolPanel(tool);
+            target.textContent = `Object: ${obj.type || 'prop'} (${obj.body.mass.toFixed(1)} kg)`;
+            if (tool === 'paint') {
+                title.textContent = 'Paint & material';
+                const colorIn = document.getElementById('sandbox-paint-color');
+                const metalIn = document.getElementById('sandbox-paint-metal');
+                const roughIn = document.getElementById('sandbox-paint-rough');
+                const hex = obj.paintColor || '#f87171';
+                if (colorIn) colorIn.value = hex;
+                if (metalIn) metalIn.value = String(obj.paintMetal != null ? obj.paintMetal : 0.2);
+                if (roughIn) roughIn.value = String(obj.paintRough != null ? obj.paintRough : 0.55);
+                refreshSandboxPaintDisplays();
+            } else if (tool === 'mass') {
+                title.textContent = 'Mass';
+                const slider = document.getElementById('sandbox-mass-slider');
+                if (slider) {
+                    slider.value = String(Math.max(0.2, Math.min(400, obj.body.mass)));
+                    refreshSandboxMassDisplay();
+                }
+            } else {
+                title.textContent = 'Ignite';
+                const slider = document.getElementById('sandbox-ignite-time');
+                const chk = document.getElementById('sandbox-ignite-explode');
+                if (slider) slider.value = String(IGNITE_DEFAULT_BURN_SEC);
+                if (chk) chk.checked = true;
+                refreshSandboxIgniteDisplay();
+            }
+            modal.hidden = false;
+            modal.setAttribute('aria-hidden', 'false');
+            if (controls && controls.isLocked) controls.unlock();
+        }
+
+        function closeSandboxToolModal(relock) {
+            const modal = document.getElementById('sandbox-tool-modal');
+            if (modal) {
+                modal.hidden = true;
+                modal.setAttribute('aria-hidden', 'true');
+            }
+            sandboxToolPending = null;
+            if (relock && controls && !isMenuOpen) {
+                setTimeout(() => { try { controls.lock(); } catch (err) {} }, 100);
+            }
+        }
+
+        function applySandboxToolModal() {
+            if (!sandboxToolPending) return;
+            const { tool, obj } = sandboxToolPending;
+            if (tool === 'paint') {
+                const hex = document.getElementById('sandbox-paint-color').value;
+                const metal = parseFloat(document.getElementById('sandbox-paint-metal').value);
+                const rough = parseFloat(document.getElementById('sandbox-paint-rough').value);
+                applyPaintToObject(obj, hex, metal, rough);
+            } else if (tool === 'mass') {
+                const m = parseFloat(document.getElementById('sandbox-mass-slider').value);
+                setObjectMass(obj, m);
+            } else {
+                const sec = parseFloat(document.getElementById('sandbox-ignite-time').value);
+                const explode = document.getElementById('sandbox-ignite-explode').checked;
+                igniteObject(obj, sec, explode);
+            }
+            closeSandboxToolModal(true);
+            updateDragModeHud();
+        }
+
+        function quickIgniteAtCrosshair() {
+            const obj = pickObjectFromRay();
+            if (!obj || !obj.body || obj.body.mass <= 0) return;
+            igniteObject(obj, IGNITE_DEFAULT_BURN_SEC, true);
+        }
+
+        function initSandboxToolModal() {
+            const modal = document.getElementById('sandbox-tool-modal');
+            const panel = modal && modal.querySelector('.physics-tune-panel');
+            const swatches = document.getElementById('paint-swatches');
+            if (swatches) {
+                PAINT_PRESETS.forEach(p => {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = p.name;
+                    btn.style.borderColor = p.color;
+                    btn.addEventListener('click', () => {
+                        document.getElementById('sandbox-paint-color').value = p.color;
+                        document.getElementById('sandbox-paint-metal').value = String(p.metal);
+                        document.getElementById('sandbox-paint-rough').value = String(p.rough);
+                        refreshSandboxPaintDisplays();
+                    });
+                    swatches.appendChild(btn);
+                });
+            }
+            const massSlider = document.getElementById('sandbox-mass-slider');
+            const metalSlider = document.getElementById('sandbox-paint-metal');
+            const roughSlider = document.getElementById('sandbox-paint-rough');
+            const igniteSlider = document.getElementById('sandbox-ignite-time');
+            if (massSlider) massSlider.addEventListener('input', refreshSandboxMassDisplay);
+            if (metalSlider) metalSlider.addEventListener('input', refreshSandboxPaintDisplays);
+            if (roughSlider) roughSlider.addEventListener('input', refreshSandboxPaintDisplays);
+            if (igniteSlider) igniteSlider.addEventListener('input', refreshSandboxIgniteDisplay);
+            document.getElementById('sandbox-tool-apply').addEventListener('click', applySandboxToolModal);
+            document.getElementById('sandbox-tool-cancel').addEventListener('click', () => closeSandboxToolModal(true));
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) closeSandboxToolModal(true);
+                });
+            }
+            if (panel) panel.addEventListener('click', (e) => e.stopPropagation());
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Escape') {
+                    if (physicsTunePending) closePhysicsTuneModal(true);
+                    if (sandboxToolPending) closeSandboxToolModal(true);
+                }
+            });
         }
 
         function cycleTimeMode() {
@@ -634,7 +1577,7 @@
         }
 
         function compensatePlayerNonSimTime(dt, simDt) {
-            if (isGhostMode || !playerBody || playerBody.mass <= 0) return;
+            if (isGhostMode || !playerBody || playerBody.mass <= 0 || mountedVehiclePhy) return;
             const extra = dt - simDt;
             if (extra <= 1e-8) return;
             const g = world.gravity.y;
@@ -642,7 +1585,7 @@
             playerBody.position.x += playerBody.velocity.x * extra;
             playerBody.position.z += playerBody.velocity.z * extra;
             playerBody.position.y += playerBody.velocity.y * extra;
-            const minY = GROUND_Y + 0.5 + GROUND_EPS;
+            const minY = GROUND_Y + PLAYER_HALF_HEIGHT + GROUND_EPS;
             if (playerBody.position.y < minY) {
                 playerBody.position.y = minY;
                 if (playerBody.velocity.y < 0) playerBody.velocity.y = 0;
@@ -669,39 +1612,98 @@
 
         let activeTab = 'shapes';
         let selectedItem = menuData.shapes[0];
-        let debugTool = 'move';
+        let debugTool = 'select';
         let isMenuOpen = false;
         let isGhostMode = false;
+        /** Shift and/or N held to sustain ghost on foot; cleared when mounting (ghost blocked in vehicles). */
+        let ghostKeyHoldMask = 0;
+        const GHOST_HOLD_SHIFT = 1;
+        const GHOST_HOLD_N = 2;
         let debugDragMode = false;
         let debugDragging = false;
         let debugResizeTarget = null;
+        let resizeGizmoGroup = null;
+        const resizeHandlePickables = [];
+        let resizeDragging = false;
+        let resizeDragAxis = null;
+        const _resizeAxisWorld = new THREE.Vector3();
+        const _resizeScrA = new THREE.Vector3();
+        const _resizeScrB = new THREE.Vector3();
 
         /** 0 = normal, 1 = 20% slow, 2 = frozen simulation */
         let timeMode = 0;
 
         let scene, camera, renderer, world, controls, playerBody;
+        /** Simple humanoid shown only in third-person (not in spawn raycasts). */
+        let playerAvatarGroup = null;
+        const _avatarYawEuler = new THREE.Euler(0, 0, 0, 'YXZ');
         let objectsToUpdate = [];
         let spawnableMeshes = []; 
-        const clock = new THREE.Clock();
+        let clock = null;
 
         let defaultContactMaterial;
         let bouncerMaterial;
+        let playerMaterial;
+        let floorMaterial;
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, moveUp = false, moveDown = false;
-        const playerSpeed = 10; 
+        const playerSpeed = 12; 
         const ghostSpeed = 20;
         const jumpForce = 8;
 
-        let raycaster = new THREE.Raycaster();
+        let raycaster = null;
         let mouseConstraint = null;
         let grabbedObject = null;
         let grabDist = 5;
-        const holderBody = new CANNON.Body({ mass: 0 });
+        let worldGravityMag = BASE_GRAVITY;
+        let worldFriction = BASE_WORLD_FRICTION;
+        let cmPlayerFloor = null;
+        let holderBody = null;
+        const prevGrabTargetWorld = new THREE.Vector3();
+        let hasPrevGrabTarget = false;
+        const grabRodVelocity = new THREE.Vector3();
+
+        let mountedVehiclePhy = null;
+        let vehicleBrake = false;
+        let vehicleDrift = false;
+        let vehicleBoost = false;
+        let useThirdPersonCamera = false;
 
         let floorPhysicsBody = null;
         let ropeGunPending = null;
         const debugRopes = [];
         let controlsPanelHidden = false;
+        /** Detonations queued from collide callbacks (cannot remove bodies during step). */
+        let barrelDetonateQueue = [];
+        /** Brief explosion visuals (mesh + light), updated every frame. */
+        let activeExplosionFX = [];
+        /** Frozen poses for middle-click weld; Map phyObj -> { pos, quat } */
+        const weldedObjects = new Map();
+        const selectedObjects = new Set();
+        let selectMarqueeActive = false;
+        const selectMarqueePx = { x: 0, y: 0 };
+        let selectGroupDragging = false;
+        let selectGizmoDragging = false;
+        let selectGizmoDragKind = null;
+        let selectGizmoDragAxis = null;
+        let selectDragAccumAngle = 0;
+        const selectDragPivot = new THREE.Vector3();
+        let selectDragSnapshots = null;
+        let moveGizmoGroup = null;
+        let rotateGizmoGroup = null;
+        const moveGizmoPickables = [];
+        const rotateGizmoPickables = [];
+        const _selRight = new THREE.Vector3();
+        const _selUp = new THREE.Vector3();
+        const _selDelta = new THREE.Vector3();
+        const _selRotQ = new THREE.Quaternion();
+        const _selObjNDC = new THREE.Vector3();
+        const _gizmoRotAxis = new THREE.Vector3();
+        const _gizmoRotTangent = new THREE.Vector3();
+        const _gizmoViewDir = new THREE.Vector3();
+        let debugGunGroup = null;
+        let debugRocketLauncherGroup = null;
+        const activeGunBeams = [];
 
         function setControlsPanelVisible(visible) {
             controlsPanelHidden = !visible;
@@ -740,9 +1742,73 @@
             }
         }
 
-        const _linkN = new CANNON.Vec3();
-        const _linkRelV = new CANNON.Vec3();
-        const _linkImp = new CANNON.Vec3();
+        function removeAllDebugRopes() {
+            for (let i = debugRopes.length - 1; i >= 0; i--) {
+                removeRopeRecord(debugRopes[i]);
+                debugRopes.splice(i, 1);
+            }
+        }
+
+        function clearAllSpawnedObjects() {
+            if (!world) return;
+            clearRopeGunPending();
+            if (mouseConstraint) {
+                world.removeConstraint(mouseConstraint);
+                mouseConstraint = null;
+            }
+            grabbedObject = null;
+            debugDragging = false;
+            hasPrevGrabTarget = false;
+            grabRodVelocity.set(0, 0, 0);
+            if (mountedVehiclePhy) dismountVehicle();
+            debugResizeTarget = null;
+            removeAllDebugRopes();
+            barrelDetonateQueue.length = 0;
+            weldedObjects.clear();
+            clearSelection();
+            for (let i = activeExplosionFX.length - 1; i >= 0; i--) {
+                const fx = activeExplosionFX[i];
+                if (scene && fx.mesh) scene.remove(fx.mesh);
+                if (scene && fx.light) scene.remove(fx.light);
+                if (fx.mesh) {
+                    if (fx.mesh.geometry) fx.mesh.geometry.dispose();
+                    if (fx.mesh.material) fx.mesh.material.dispose();
+                }
+            }
+            activeExplosionFX.length = 0;
+            for (let i = activeGunBeams.length - 1; i >= 0; i--) {
+                const g = activeGunBeams[i];
+                if (scene && g.line) scene.remove(g.line);
+                if (g.line.geometry) g.line.geometry.dispose();
+                if (g.line.material) g.line.material.dispose();
+            }
+            activeGunBeams.length = 0;
+            const snapshot = objectsToUpdate.slice();
+            for (let i = 0; i < snapshot.length; i++) {
+                removeObject(snapshot[i]);
+            }
+        }
+
+        let _linkN = null;
+        let _linkRelV = null;
+        let _linkImp = null;
+        let _bAttachLocal = null;
+        let _bAnchorWorld = null;
+        let _bRopeVec = null;
+        let _scratchCamPivot = null;
+        let _scratchCamLook = null;
+
+        function ensurePhysicsScratchBuffers() {
+            if (_linkN) return;
+            _linkN = new CANNON.Vec3();
+            _linkRelV = new CANNON.Vec3();
+            _linkImp = new CANNON.Vec3();
+            _bAttachLocal = new THREE.Vector3();
+            _bAnchorWorld = new THREE.Vector3();
+            _bRopeVec = new THREE.Vector3();
+            _scratchCamPivot = new THREE.Vector3();
+            _scratchCamLook = new THREE.Vector3();
+        }
 
         function applyImpulsePairRopeCord(bA, bB, unitN, J) {
             if (J <= 0) return;
@@ -770,6 +1836,37 @@
                 _linkImp.copy(unitN);
                 _linkImp.scale(J * bB.invMass, _linkImp);
                 bB.velocity.vsub(_linkImp, bB.velocity);
+            }
+        }
+
+        function enforceRopeHardLength(r) {
+            r.bodyB.position.vsub(r.bodyA.position, _linkN);
+            const dist = _linkN.length();
+            if (dist <= r.maxLength + 1e-6 || dist < 1e-9) return;
+            _linkN.normalize();
+            const over = dist - r.maxLength;
+            const invA = (r.bodyA.mass > 0 && r.bodyA.invMass > 0) ? r.bodyA.invMass : 0;
+            const invB = (r.bodyB.mass > 0 && r.bodyB.invMass > 0) ? r.bodyB.invMass : 0;
+            const sum = invA + invB;
+            if (sum < 1e-10) return;
+            const n = _linkN;
+            if (invA > 0 && invB > 0) {
+                const moveA = over * (invB / sum);
+                const moveB = over * (invA / sum);
+                r.bodyA.position.x += n.x * moveA;
+                r.bodyA.position.y += n.y * moveA;
+                r.bodyA.position.z += n.z * moveA;
+                r.bodyB.position.x -= n.x * moveB;
+                r.bodyB.position.y -= n.y * moveB;
+                r.bodyB.position.z -= n.z * moveB;
+            } else if (invA > 0) {
+                r.bodyA.position.x += n.x * over;
+                r.bodyA.position.y += n.y * over;
+                r.bodyA.position.z += n.z * over;
+            } else if (invB > 0) {
+                r.bodyB.position.x -= n.x * over;
+                r.bodyB.position.y -= n.y * over;
+                r.bodyB.position.z -= n.z * over;
             }
         }
 
@@ -803,6 +1900,11 @@
                     const F = r.k * err - r.c * closingSpeed;
                     const J = Math.max(-CORD_IMPULSE_CAP, Math.min(CORD_IMPULSE_CAP, F * dt));
                     applyLinkImpulseJ(r.bodyA, r.bodyB, _linkN, J);
+                }
+            }
+            for (let pass = 0; pass < ROPE_HARD_LENGTH_PASSES; pass++) {
+                for (let j = 0; j < debugRopes.length; j++) {
+                    if (debugRopes[j].kind === 'rope') enforceRopeHardLength(debugRopes[j]);
                 }
             }
         }
@@ -868,10 +1970,6 @@
             world.addBody(anchor);
             return { body: anchor, isAnchor: true, phyObj: null };
         }
-
-        const _bAttachLocal = new THREE.Vector3();
-        const _bAnchorWorld = new THREE.Vector3();
-        const _bRopeVec = new THREE.Vector3();
 
         function attachBalloonVisual(obj, worldPoint) {
             if (!obj.balloonAttachments) obj.balloonAttachments = [];
@@ -974,6 +2072,8 @@
                     card.onclick = () => {
                         debugTool = item.id;
                         clearRopeGunPending();
+                        endSelectInteraction();
+                        updateDragModeHud();
                         renderGrid();
                     };
                     content.appendChild(card);
@@ -997,10 +2097,44 @@
             const status = document.getElementById('status-display');
             if (isGhostMode) return;
             if (debugDragMode) {
-                status.innerText = `Debug grab: ${debugTool} (0 = normal)`;
+                if (debugTool === 'gun') {
+                    status.innerText = 'Debug: hitscan gun — left click (weaker knockback + beam)';
+                } else if (debugTool === 'rocket_launcher') {
+                    status.innerText = 'Debug: rocket launcher — left click to fire explosive rocket';
+                } else if (debugTool === 'weld') {
+                    status.innerText = 'Debug: weld — middle-click target (J = clear all)';
+                } else if (debugTool === 'gravity') {
+                    status.innerText = `Debug: gravity — floor = world (${worldGravityMag}) · click prop = per-object`;
+                } else if (debugTool === 'friction') {
+                    status.innerText = `Debug: friction — floor = world (${worldFriction.toFixed(2)}) · click prop = per-object`;
+                } else if (debugTool === 'paint') {
+                    status.innerText = 'Debug: paint — click a prop to open color/material menu';
+                } else if (debugTool === 'mass') {
+                    status.innerText = 'Debug: mass — click prop (or physics grab) for mass menu';
+                } else if (debugTool === 'ignite') {
+                    status.innerText = 'Debug: ignite — click prop for menu · I = quick ignite';
+                } else if (debugTool === 'resize') {
+                    status.innerText = 'Debug: resize — click box/sphere · drag RGB faces · scroll = uniform · works while welded';
+                } else if (debugTool === 'select') {
+                    const n = selectedObjects.size;
+                    status.innerText = 'Debug: select — drag empty = box select · Shift/Ctrl+click = add/remove'
+                        + (n ? ` · ${n} selected` : '');
+                } else if (debugTool === 'move') {
+                    const n = selectedObjects.size;
+                    status.innerText = 'Debug: move — drag RGB arrows (world axes) · Shift/Ctrl+click to select'
+                        + (n ? ` · ${n} selected` : '');
+                } else if (debugTool === 'rotate') {
+                    const n = selectedObjects.size;
+                    status.innerText = 'Debug: rotate — drag colored rings around X/Y/Z · Shift/Ctrl+click to select'
+                        + (n ? ` · ${n} selected` : '');
+                } else {
+                    status.innerText = `Debug grab: ${debugTool} (0 = normal)`;
+                }
                 status.classList.add('status-debug');
             } else {
-                status.innerText = 'Sandbox Mode: Active';
+                status.innerText = useThirdPersonCamera
+                    ? 'Sandbox Mode: 3rd person (U → 1st)'
+                    : 'Sandbox Mode: 1st person (U → 3rd)';
                 status.classList.remove('status-debug');
             }
         }
@@ -1009,7 +2143,9 @@
             debugDragMode = !debugDragMode;
             if (mouseConstraint) onMouseUp();
             debugDragging = false;
-            debugResizeTarget = null;
+            endSelectInteraction();
+            clearSelection();
+            clearResizeTarget();
             clearRopeGunPending();
             updateDragModeHud();
         }
@@ -1029,11 +2165,23 @@
             }
         }
 
+        function reconcileGhostFromHoldMask() {
+            if (mountedVehiclePhy) return;
+            if (ghostKeyHoldMask) {
+                if (!isGhostMode) toggleGhostMode(true);
+            } else if (isGhostMode) {
+                toggleGhostMode(false);
+            }
+        }
+
         function toggleGhostMode(enable) {
+            if (enable && mountedVehiclePhy) return;
             isGhostMode = enable;
             const status = document.getElementById('status-display');
             if (enable) {
-                status.innerText = "Ghost Mode: Active (No-Clip)";
+                vehicleDrift = false;
+                vehicleBoost = false;
+                status.innerText = 'Ghost Mode: Active (No-Clip)';
                 status.classList.remove('status-debug');
                 status.classList.add('status-ghost');
                 playerBody.collisionFilterGroup = 0;
@@ -1045,13 +2193,166 @@
                 status.classList.remove('status-ghost');
                 playerBody.collisionFilterGroup = 1;
                 playerBody.collisionFilterMask = -1;
-                playerBody.mass = 80;
+                playerBody.mass = PLAYER_MASS;
                 playerBody.updateMassProperties();
                 updateDragModeHud();
             }
         }
 
+        function createDebugGunView(cam) {
+            const g = new THREE.Group();
+            const matMetal = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.42, roughness: 0.45 });
+            const matDark = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.38 });
+            const grip = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.15, 0.26), matMetal);
+            const slide = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.1, 0.2), matDark);
+            slide.position.set(0, 0.02, -0.05);
+            const barrel = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.024, 0.03, 0.45, 8),
+                new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.52, roughness: 0.36 })
+            );
+            barrel.rotation.x = Math.PI / 2;
+            barrel.position.set(0.05, -0.02, -0.36);
+            grip.position.set(0.24, -0.22, -0.42);
+            g.add(grip, slide, barrel);
+            g.visible = false;
+            cam.add(g);
+            return g;
+        }
+
+        function createDebugRocketLauncherView(cam) {
+            const g = new THREE.Group();
+            const tube = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.055, 0.072, 0.52, 10),
+                new THREE.MeshStandardMaterial({ color: 0x365314, metalness: 0.25, roughness: 0.55 })
+            );
+            tube.rotation.x = Math.PI / 2;
+            tube.position.set(0.06, -0.2, -0.55);
+            const sight = new THREE.Mesh(
+                new THREE.BoxGeometry(0.04, 0.03, 0.08),
+                new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.4, roughness: 0.4 })
+            );
+            sight.position.set(0.02, -0.12, -0.28);
+            const grip = new THREE.Mesh(
+                new THREE.BoxGeometry(0.09, 0.16, 0.22),
+                new THREE.MeshStandardMaterial({ color: 0x27272a, metalness: 0.35, roughness: 0.5 })
+            );
+            grip.position.set(0.14, -0.32, -0.38);
+            g.add(tube, sight, grip);
+            g.visible = false;
+            cam.add(g);
+            return g;
+        }
+
+        /** Same API as THREE.PointerLockControls (r128); inlined so file:// and blocked CDNs cannot brick the whole page. */
+        function createPointerLockControls(camera, domElement) {
+            domElement = domElement || document.body;
+            const listeners = {};
+            const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+            const PI_2 = Math.PI / 2;
+            let mouseX = 0;
+            let mouseY = 0;
+
+            const controls = {
+                domElement,
+                isLocked: false,
+                minPolarAngle: 0,
+                maxPolarAngle: Math.PI,
+                addEventListener(type, listener) {
+                    if (!listeners[type]) listeners[type] = [];
+                    if (listeners[type].indexOf(listener) === -1) listeners[type].push(listener);
+                },
+                removeEventListener(type, listener) {
+                    if (!listeners[type]) return;
+                    const i = listeners[type].indexOf(listener);
+                    if (i !== -1) listeners[type].splice(i, 1);
+                },
+                dispatchEvent(event) {
+                    if (!listeners[event.type]) return;
+                    listeners[event.type].slice().forEach((fn) => { fn.call(controls, event); });
+                },
+                getObject() { return camera; },
+                lock() { domElement.requestPointerLock(); },
+                unlock() { document.exitPointerLock(); }
+            };
+
+            function onMouseMove(event) {
+                if (!controls.isLocked) return;
+                const movementX = event.movementX || event.mozMovementX || event.screenX - mouseX;
+                const movementY = event.movementY || event.mozMovementY || event.screenY - mouseY;
+                mouseX = event.screenX;
+                mouseY = event.screenY;
+                euler.setFromQuaternion(camera.quaternion);
+                euler.y -= movementX * 0.002;
+                euler.x -= movementY * 0.002;
+                euler.x = Math.max(PI_2 - controls.maxPolarAngle, Math.min(PI_2 - controls.minPolarAngle, euler.x));
+                camera.quaternion.setFromEuler(euler);
+                controls.dispatchEvent({ type: 'change' });
+            }
+
+            function onPointerlockChange() {
+                if (document.pointerLockElement === domElement) {
+                    controls.dispatchEvent({ type: 'lock' });
+                    controls.isLocked = true;
+                } else {
+                    controls.dispatchEvent({ type: 'unlock' });
+                    controls.isLocked = false;
+                }
+            }
+
+            document.addEventListener('mousemove', onMouseMove, false);
+            document.addEventListener('pointerlockchange', onPointerlockChange, false);
+            return controls;
+        }
+
+        /** Rigid-body-sized humanoid; group origin = physics capsule center. */
+        function createPlayerAvatarGroup() {
+            const g = new THREE.Group();
+            g.name = 'player_avatar';
+            const matSuit = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.52, metalness: 0.12 });
+            const matTrim = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.58 });
+            const matSkin = new THREE.MeshStandardMaterial({ color: 0xfcd34d, roughness: 0.42 });
+            const H = PLAYER_HALF_HEIGHT * 2 * 0.9;
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, H, 12), matSuit);
+            body.position.y = -PLAYER_HALF_HEIGHT + H * 0.5;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), matSkin);
+            head.position.y = -PLAYER_HALF_HEIGHT + H + 0.14;
+            head.castShadow = true;
+            head.receiveShadow = true;
+            const shoulderW = 0.5;
+            const armGeo = new THREE.BoxGeometry(0.11, 0.36, 0.1);
+            const armL = new THREE.Mesh(armGeo, matSuit);
+            armL.position.set(-shoulderW * 0.48, -PLAYER_HALF_HEIGHT + H * 0.72, 0);
+            armL.castShadow = true;
+            const armR = armL.clone();
+            armR.position.x = -armL.position.x;
+            const legGeo = new THREE.BoxGeometry(0.15, 0.32, 0.15);
+            const legL = new THREE.Mesh(legGeo, matTrim);
+            legL.position.set(-0.1, -PLAYER_HALF_HEIGHT + 0.21, 0);
+            legL.castShadow = true;
+            const legR = legL.clone();
+            legR.position.x = 0.1;
+            g.add(body, head, armL, armR, legL, legR);
+            return g;
+        }
+
+        function syncPlayerAvatarVisual() {
+            if (!playerAvatarGroup || !playerBody || !camera) return;
+            const show = useThirdPersonCamera && controls && controls.isLocked;
+            playerAvatarGroup.visible = show;
+            if (!show) return;
+            playerAvatarGroup.position.set(playerBody.position.x, playerBody.position.y, playerBody.position.z);
+            _avatarYawEuler.setFromQuaternion(camera.quaternion, 'YXZ');
+            playerAvatarGroup.rotation.set(0, _avatarYawEuler.y, 0);
+        }
+
         function init() {
+            if (!clock) clock = new THREE.Clock();
+            if (!holderBody) holderBody = new CANNON.Body({ mass: 0 });
+            if (!raycaster) raycaster = new THREE.Raycaster();
+            ensurePhysicsScratchBuffers();
+
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x0f172a);
             scene.fog = new THREE.Fog(0x0f172a, 0, 150);
@@ -1062,14 +2363,65 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.shadowMap.enabled = true;
             document.body.appendChild(renderer.domElement);
+            renderer.domElement.style.cssText = 'display:block;position:fixed;left:0;top:0;width:100%;height:100%;z-index:0;touch-action:none;outline:none;';
 
-            controls = new THREE.PointerLockControls(camera, document.body);
+            controls = createPointerLockControls(camera, document.body);
             const blocker = document.getElementById('blocker');
-            blocker.addEventListener('click', () => {
-                if (!isMenuOpen) {
-                   try { controls.lock(); } catch (e) {}
+
+            function isStartBlockerVisible() {
+                if (!blocker) return false;
+                return getComputedStyle(blocker).display !== 'none';
+            }
+
+            function tryRequestPointerLock() {
+                if (!controls || isMenuOpen || controls.isLocked) return;
+                const hint = document.getElementById('pointer-lock-hint');
+                if (hint) hint.classList.remove('visible');
+                try {
+                    controls.lock();
+                } catch (err) {
+                    console.warn(err);
+                    if (hint && isStartBlockerVisible()) hint.classList.add('visible');
+                }
+            }
+
+            document.addEventListener('pointerlockerror', () => {
+                const hint = document.getElementById('pointer-lock-hint');
+                if (hint && isStartBlockerVisible()) hint.classList.add('visible');
+            });
+            document.addEventListener('pointerlockchange', () => {
+                const hint = document.getElementById('pointer-lock-hint');
+                if (document.pointerLockElement && hint) hint.classList.remove('visible');
+            });
+
+            blocker.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                if (!isMenuOpen) tryRequestPointerLock();
+            });
+            blocker.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                if (!isMenuOpen) tryRequestPointerLock();
+            }, { passive: false });
+            renderer.domElement.addEventListener('click', (ev) => {
+                if (isStartBlockerVisible() && !isMenuOpen && !controls.isLocked) {
+                    ev.stopPropagation();
+                    tryRequestPointerLock();
                 }
             });
+            window.addEventListener('click', (ev) => {
+                if (isMenuOpen || !controls || controls.isLocked) return;
+                const b = document.getElementById('blocker');
+                if (!b || getComputedStyle(b).display === 'none') return;
+                let t = ev.target;
+                while (t) {
+                    if (t === b) {
+                        tryRequestPointerLock();
+                        return;
+                    }
+                    t = t.parentElement;
+                }
+            }, true);
+
             controls.addEventListener('lock', () => blocker.style.display = 'none');
             controls.addEventListener('unlock', () => {
                 if (!isMenuOpen) blocker.style.display = 'flex';
@@ -1077,20 +2429,39 @@
             scene.add(controls.getObject());
 
             world = new CANNON.World();
-            world.gravity.set(0, -18.0, 0); 
+            world.gravity.set(0, -BASE_GRAVITY, 0);
             world.broadphase = new CANNON.SAPBroadphase(world);
 
             defaultContactMaterial = world.defaultContactMaterial;
+            defaultContactMaterial.friction = BASE_WORLD_FRICTION;
             bouncerMaterial = new CANNON.Material('bouncer');
+            playerMaterial = new CANNON.Material('player');
+            floorMaterial = new CANNON.Material('floor');
             world.addContactMaterial(new CANNON.ContactMaterial(defaultContactMaterial, bouncerMaterial, {
                 friction: 0.05,
                 restitution: 1.35
             }));
+            // No sideways grip on dynamics so walking does not twist suspended platforms; floor uses high-friction material.
+            world.addContactMaterial(new CANNON.ContactMaterial(playerMaterial, defaultContactMaterial, {
+                friction: 0,
+                restitution: 0.02
+            }));
+            world.addContactMaterial(new CANNON.ContactMaterial(playerMaterial, bouncerMaterial, {
+                friction: 0.06,
+                restitution: 1.28
+            }));
             
-            const playerShape = new CANNON.Sphere(0.5);
-            playerBody = new CANNON.Body({ mass: 80, fixedRotation: true, shape: playerShape });
+            const phx = 0.34, phy = PLAYER_HALF_HEIGHT, phz = 0.34;
+            const playerShape = new CANNON.Box(new CANNON.Vec3(phx, phy, phz));
+            playerBody = new CANNON.Body({ mass: PLAYER_MASS, fixedRotation: true, shape: playerShape });
+            playerBody.material = playerMaterial;
+            playerBody.linearDamping = 0.022;
             playerBody.position.set(0, 5, 5);
             world.addBody(playerBody);
+
+            playerAvatarGroup = createPlayerAvatarGroup();
+            playerAvatarGroup.visible = false;
+            scene.add(playerAvatarGroup);
 
             holderBody.collisionFilterGroup = 0;
             holderBody.collisionFilterMask = 0;
@@ -1105,46 +2476,119 @@
             const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
             floorMesh.rotation.x = -Math.PI / 2;
             floorMesh.receiveShadow = true;
+            floorVisualMesh = floorMesh;
             scene.add(floorMesh);
             spawnableMeshes.push(floorMesh);
 
             floorPhysicsBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+            floorPhysicsBody.material = floorMaterial;
             floorPhysicsBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
             world.addBody(floorPhysicsBody);
+            cmPlayerFloor = new CANNON.ContactMaterial(playerMaterial, floorMaterial, {
+                friction: 0.58,
+                restitution: 0.0
+            });
+            world.addContactMaterial(cmPlayerFloor);
+            applyWorldPhysicsSettings();
             scene.add(new THREE.GridHelper(1000, 200, 0x334155, 0x1e293b));
 
+            debugGunGroup = createDebugGunView(camera);
+            debugRocketLauncherGroup = createDebugRocketLauncherView(camera);
+
             document.addEventListener('keydown', (e) => {
+                if (isDebugMenuOpen()) return;
                 if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+                if (!isMenuOpen && controls && !controls.isLocked && (e.code === 'Enter' || e.code === 'Space')) {
+                    e.preventDefault();
+                    tryRequestPointerLock();
+                    return;
+                }
                 if (e.code === 'KeyH' && !e.repeat) {
                     toggleControlsPanel();
+                    return;
+                }
+                if ((e.code === 'Delete' || e.code === 'Backspace') && !e.repeat) {
+                    e.preventDefault();
+                    if (window.confirm('Are you sure?\n\nAll spawned objects, ropes, and balloons will be removed. The floor and player stay. This cannot be undone.')) {
+                        clearAllSpawnedObjects();
+                    }
                     return;
                 }
                 if (e.code === 'Digit0' && !e.repeat) {
                     toggleDebugDragMode();
                     return;
                 }
+                if (e.code === 'KeyV' && !e.repeat && controls.isLocked && !isMenuOpen) {
+                    tryToggleVehicleMount();
+                    return;
+                }
                 if (e.code === 'KeyF' && controls.isLocked && !isMenuOpen) {
-                    toggleRocketThrustAtCrosshair();
+                    handleFKeyAtCrosshair();
                     return;
                 }
                 if (e.code === 'KeyG' && !e.repeat && controls.isLocked && !isMenuOpen) {
                     cycleTimeMode();
                     return;
                 }
+                if (e.code === 'KeyI' && !e.repeat && controls.isLocked && !isMenuOpen && debugDragMode && debugTool === 'ignite') {
+                    quickIgniteAtCrosshair();
+                    return;
+                }
+                if (e.code === 'KeyU' && !e.repeat && controls.isLocked && !isMenuOpen) {
+                    useThirdPersonCamera = !useThirdPersonCamera;
+                    const st = document.getElementById('status-display');
+                    if (st && !isGhostMode) {
+                        if (mountedVehiclePhy) {
+                            st.innerText = getMountedStatusText();
+                        } else {
+                            updateDragModeHud();
+                        }
+                    }
+                    return;
+                }
+                if (e.code === 'KeyJ' && !e.repeat && controls.isLocked && !isMenuOpen) {
+                    weldedObjects.clear();
+                    return;
+                }
+                if (e.code === 'KeyN' && controls && controls.isLocked && !isMenuOpen) {
+                    if (!mountedVehiclePhy) {
+                        ghostKeyHoldMask |= GHOST_HOLD_N;
+                        reconcileGhostFromHoldMask();
+                    }
+                    return;
+                }
+                if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+                    if (controls && controls.isLocked && !isMenuOpen) {
+                        if (mountedVehiclePhy) vehicleDrift = true;
+                        else {
+                            ghostKeyHoldMask |= GHOST_HOLD_SHIFT;
+                            reconcileGhostFromHoldMask();
+                        }
+                    }
+                    return;
+                }
                 if (e.code === 'KeyQ') { toggleQMenu(true); return; }
                 if (e.code === 'KeyE' && !isMenuOpen) smartSpawn(selectedItem.id);
-                if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleGhostMode(true);
                 
                 switch(e.code) {
                     case 'KeyW': moveForward = true; break;
                     case 'KeyS': moveBackward = true; break;
                     case 'KeyA': moveLeft = true; break;
                     case 'KeyD': moveRight = true; break;
-                    case 'ControlLeft': moveDown = true; break;
-                    case 'Space': 
+                    case 'ControlLeft':
+                    case 'ControlRight':
+                        if (isGhostMode) moveDown = true;
+                        else vehicleBoost = true;
+                        break;
+                    case 'Space':
+                        if (!controls.isLocked) break;
                         moveUp = true;
+                        if (mountedVehiclePhy) {
+                            vehicleBrake = true;
+                            break;
+                        }
                         if (!isGhostMode && Math.abs(playerBody.velocity.y) < 1) {
-                            playerBody.velocity.y = jumpForce; 
+                            playerBody.velocity.y = jumpForce;
                         }
                         break;
                 }
@@ -1152,15 +2596,27 @@
 
             document.addEventListener('keyup', (e) => {
                 if (e.code === 'KeyQ') toggleQMenu(false);
-                if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') toggleGhostMode(false);
+                if (e.code === 'KeyN') {
+                    ghostKeyHoldMask &= ~GHOST_HOLD_N;
+                    reconcileGhostFromHoldMask();
+                }
+                if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+                    vehicleDrift = false;
+                    ghostKeyHoldMask &= ~GHOST_HOLD_SHIFT;
+                    reconcileGhostFromHoldMask();
+                }
 
                 switch(e.code) {
                     case 'KeyW': moveForward = false; break;
                     case 'KeyS': moveBackward = false; break;
                     case 'KeyA': moveLeft = false; break;
                     case 'KeyD': moveRight = false; break;
-                    case 'Space': moveUp = false; break;
-                    case 'ControlLeft': moveDown = false; break;
+                    case 'Space': moveUp = false; vehicleBrake = false; break;
+                    case 'ControlLeft':
+                    case 'ControlRight':
+                        moveDown = false;
+                        vehicleBoost = false;
+                        break;
                 }
             });
 
@@ -1176,12 +2632,172 @@
             document.getElementById('controls-reveal-btn').addEventListener('click', () => setControlsPanelVisible(true));
             
             initMenuUI();
+            initPhysicsTuneModal();
+            initSandboxToolModal();
+            initResizeGizmoSystem();
+            initSelectGizmoSystem();
             updateDragModeHud();
             updateTimeHud();
+            document.title = '3D Physics Sandbox v' + APP_VERSION + ' — Smart Spawning';
+            const verEl = document.getElementById('app-version');
+            if (verEl) verEl.textContent = 'v' + APP_VERSION;
             animate();
         }
 
+        
+        function syncBuggyWheelMeshes(phy) {
+            if (!phy || phy.type !== 'buggy' || !phy.raycastVehicle || !phy.wheelMeshes || !phy.wheelMeshes.length) return;
+            const v = phy.raycastVehicle;
+            for (let i = 0; i < phy.wheelMeshes.length; i++) {
+                v.updateWheelTransform(i);
+                const tr = v.wheelInfos[i].worldTransform;
+                const wm = phy.wheelMeshes[i];
+                wm.position.set(tr.position.x, tr.position.y, tr.position.z);
+                wm.quaternion.set(tr.quaternion.x, tr.quaternion.y, tr.quaternion.z, tr.quaternion.w);
+            }
+        }
+
+        function dismountVehicle() {
+            if (!mountedVehiclePhy || !playerBody) return;
+            const b = mountedVehiclePhy.body;
+            const back = new THREE.Vector3(-1.2, 0, 0);
+            back.applyQuaternion(new THREE.Quaternion(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w));
+            playerBody.position.set(
+                b.position.x + back.x * 2.4,
+                b.position.y + PLAYER_HALF_HEIGHT + 0.45,
+                b.position.z + back.z * 2.4
+            );
+            playerBody.velocity.set(b.velocity.x * 0.85, b.velocity.y + 0.8, b.velocity.z * 0.85);
+            playerBody.collisionFilterGroup = 1;
+            playerBody.collisionFilterMask = -1;
+            mountedVehiclePhy = null;
+            vehicleBrake = false;
+            vehicleDrift = false;
+            vehicleBoost = false;
+            updateDragModeHud();
+        }
+
+        function mountVehicle(phy) {
+            if (!phy || phy.type !== 'buggy' || !phy.body) return;
+            if (mouseConstraint) onMouseUp();
+            ghostKeyHoldMask = 0;
+            if (isGhostMode) toggleGhostMode(false);
+            mountedVehiclePhy = phy;
+            playerBody.collisionFilterGroup = 0;
+            playerBody.collisionFilterMask = 0;
+            vehicleBrake = false;
+            vehicleDrift = false;
+            vehicleBoost = false;
+            const status = document.getElementById('status-display');
+            if (status && !isGhostMode) {
+                status.innerText = getMountedStatusText();
+                status.classList.add('status-debug');
+            }
+        }
+
+        function tryToggleVehicleMount() {
+            if (mountedVehiclePhy) {
+                dismountVehicle();
+                return;
+            }
+            if (!raycaster || !camera || !playerBody) return;
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const bodies = objectsToUpdate.map(o => o.mesh);
+            const hits = raycaster.intersectObjects(bodies, true);
+            for (let i = 0; i < hits.length; i++) {
+                let obj = null;
+                const hit = hits[i];
+                objectsToUpdate.forEach(o => {
+                    o.mesh.traverse(c => { if (c === hit.object) obj = o; });
+                    if (o.mesh === hit.object) obj = o;
+                });
+                if (obj && obj.type === 'buggy' && obj.body && obj.body.mass > 0) {
+                    if (playerBody.position.distanceTo(obj.body.position) < BUGGY_MOUNT_RANGE) mountVehicle(obj);
+                    return;
+                }
+            }
+        }
+
+        function applyBuggyDriveInput() {
+            const phy = mountedVehiclePhy;
+            if (!phy || !phy.body) return;
+            const boostMul = vehicleBoost ? BUGGY_BOOST_ENGINE_MULT : 1;
+            if (phy.driveFallback) {
+                const b = phy.body;
+                const forward = new CANNON.Vec3(1, 0, 0);
+                b.quaternion.vmult(forward, forward);
+                const throttle = Number(moveForward) - Number(moveBackward);
+                if (throttle !== 0) {
+                    const f = new CANNON.Vec3(
+                        forward.x * throttle * BUGGY_FALLBACK_FORCE * boostMul * getSimTimeScale(),
+                        forward.y * throttle * BUGGY_FALLBACK_FORCE * boostMul * getSimTimeScale(),
+                        forward.z * throttle * BUGGY_FALLBACK_FORCE * boostMul * getSimTimeScale()
+                    );
+                    b.applyForce(f, b.position);
+                }
+                const steer = (Number(moveLeft) - Number(moveRight)) * BUGGY_FALLBACK_STEER;
+                b.angularVelocity.y += steer * getSimTimeScale() * 18;
+                if (vehicleDrift) {
+                    const steerIn = (Number(moveLeft) - Number(moveRight));
+                    b.angularVelocity.y += steerIn * getSimTimeScale() * 26;
+                }
+                if (vehicleBrake) {
+                    b.velocity.x *= 0.88;
+                    b.velocity.z *= 0.88;
+                    b.velocity.y *= 0.95;
+                    b.angularVelocity.scale(0.85, b.angularVelocity);
+                }
+                return;
+            }
+            const v = phy.raycastVehicle;
+            if (!v) return;
+            for (let wi = 0; wi < v.wheelInfos.length; wi++) {
+                const slip = vehicleDrift
+                    ? (wi < 2 ? BUGGY_DRIFT_FRONT_FRICTION : BUGGY_DRIFT_REAR_FRICTION)
+                    : BUGGY_WHEEL_FRIC_NORMAL;
+                v.wheelInfos[wi].frictionSlip = slip;
+            }
+            const eng = (Number(moveForward) - Number(moveBackward)) * BUGGY_MAX_ENGINE * boostMul;
+            const steer = (Number(moveLeft) - Number(moveRight)) * BUGGY_MAX_STEER;
+            v.applyEngineForce(eng, 2);
+            v.applyEngineForce(eng, 3);
+            v.setSteeringValue(steer, 0);
+            v.setSteeringValue(steer, 1);
+            const brk = vehicleBrake ? BUGGY_BRAKE_FORCE : 0;
+            for (let w = 0; w < 4; w++) v.setBrake(brk, w);
+        }
+
+        function syncPlayerToBuggySeat() {
+            const phy = mountedVehiclePhy;
+            if (!phy || !phy.body || !phy.driverSeatLocal) return;
+            const b = phy.body;
+            const local = phy.driverSeatLocal;
+            const wx = new THREE.Vector3(local.x, local.y, local.z);
+            wx.applyQuaternion(new THREE.Quaternion(b.quaternion.x, b.quaternion.y, b.quaternion.z, b.quaternion.w));
+            playerBody.position.set(b.position.x + wx.x, b.position.y + wx.y, b.position.z + wx.z);
+            playerBody.velocity.set(b.velocity.x, b.velocity.y, b.velocity.z);
+        }
+
+        function getMountedStatusText() {
+            return 'Rideable: WASD · Space brake · Shift drift · Ctrl boost · '
+                + (useThirdPersonCamera ? '3rd' : '1st') + ' person (U) · V exit';
+        }
+
+        function applyThirdPersonCameraOffset() {
+            if (!playerBody || !camera || !_scratchCamPivot || !_scratchCamLook) return;
+            _scratchCamPivot.set(
+                playerBody.position.x,
+                playerBody.position.y + FIRST_PERSON_EYE_Y,
+                playerBody.position.z
+            );
+            _scratchCamLook.set(0, 0, -1).applyQuaternion(camera.quaternion);
+            camera.position.copy(_scratchCamPivot).addScaledVector(_scratchCamLook, -THIRD_PERSON_DISTANCE);
+        }
+
         function removeObject(obj) {
+            clearIgniteFx(obj);
+            removeFromSelection(obj);
+            weldedObjects.delete(obj);
             if (grabbedObject === obj) {
                 if (mouseConstraint) {
                     world.removeConstraint(mouseConstraint);
@@ -1190,7 +2806,7 @@
                 grabbedObject = null;
                 debugDragging = false;
             }
-            if (debugResizeTarget === obj) debugResizeTarget = null;
+            if (debugResizeTarget === obj) clearResizeTarget();
             removeAllRopesInvolvingBody(obj.body);
             if (obj.balloonAttachments && obj.balloonAttachments.length) {
                 obj.balloonAttachments.forEach(att => {
@@ -1211,7 +2827,23 @@
                 obj.massLabel.material.dispose();
                 obj.massLabel = null;
             }
-            world.removeBody(obj.body);
+            if (obj.type === 'buggy') {
+                if (mountedVehiclePhy === obj) dismountVehicle();
+                if (obj.raycastVehicle) {
+                    obj.raycastVehicle.removeFromWorld(world);
+                } else {
+                    world.removeBody(obj.body);
+                }
+                if (obj.wheelMeshes && obj.wheelMeshes.length) {
+                    obj.wheelMeshes.forEach(wm => {
+                        scene.remove(wm);
+                        if (wm.geometry) wm.geometry.dispose();
+                        if (wm.material) wm.material.dispose();
+                    });
+                }
+            } else {
+                world.removeBody(obj.body);
+            }
             scene.remove(obj.mesh);
             
             obj.mesh.traverse(c => {
@@ -1227,6 +2859,8 @@
         function createPhysicsObject(type, pos, massOverride = null, rot = null) {
             let mesh, body;
             let wedgeMinY = null;
+            let buggyRaycastVehicle = null;
+            let buggyWheelMeshes = [];
             const mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
             
             if (type === 'box') {
@@ -1258,31 +2892,68 @@
                 body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(w, 0.15, l)) });
                 mesh = new THREE.Mesh(new THREE.BoxGeometry(w*2, 0.3, l*2), mat);
                 mat.color.set(massOverride === 'fragile' ? 0xd1d5db : 0x94a3b8);
+                body.angularDamping = 0.92;
+                body.linearDamping = 0.12;
             } else if (type === 'wedge') {
-                const w = makeWedgeConvex();
+                const w = makeUnitWedgeData();
                 const verts = w.verts.map(v => v.clone());
-                const m = resolveMassOverride(massOverride, massFromBox(1, 0.55, 1) * 0.92);
+                const he = w.halfExtents;
+                const m = resolveMassOverride(massOverride, massFromBox(he, he, he) * 0.5);
                 body = new CANNON.Body({ mass: m });
+                let wedgeShapeOk = false;
                 try {
-                    body.addShape(new CANNON.ConvexPolyhedron(verts, w.faces));
+                    const wedgeShape = new CANNON.ConvexPolyhedron(verts, w.faces);
+                    body.addShape(wedgeShape);
+                    wedgeShapeOk = true;
                 } catch (err) {
-                    body.addShape(new CANNON.Box(new CANNON.Vec3(1, 0.45, 1)));
+                    console.warn('Wedge ConvexPolyhedron failed, using solid box fallback', err);
                 }
-                const positions = [];
-                verts.forEach(v => positions.push(v.x, v.y, v.z));
-                const idx = [
-                    0, 3, 2, 0, 2, 1,
-                    1, 2, 5, 1, 5, 4,
-                    0, 1, 4,
-                    3, 5, 2,
-                    0, 4, 5, 0, 5, 3
-                ];
+                if (!wedgeShapeOk) {
+                    body.addShape(new CANNON.Box(new CANNON.Vec3(he, he, he)));
+                }
                 const geom = new THREE.BufferGeometry();
-                geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-                geom.setIndex(idx);
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(w.positions, 3));
+                geom.setIndex(w.indices);
                 geom.computeVertexNormals();
-                mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: 0x22c55e, flatShading: true }));
-                wedgeMinY = Math.min(...verts.map(v => v.y));
+                geom.computeBoundingSphere();
+                mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.55 }));
+                wedgeMinY = w.minY;
+            } else if (type === 'glass') {
+                const hx = 0.5, hy = 0.5, hz = 0.5;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz) * 0.42);
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                mesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(1, 1, 1),
+                    new THREE.MeshStandardMaterial({
+                        color: 0xbae6fd,
+                        transparent: true,
+                        opacity: 0.38,
+                        roughness: 0.08,
+                        metalness: 0.15,
+                        side: THREE.DoubleSide
+                    })
+                );
+                attachGlassShatterListener(body);
+            } else if (type === 'glass_shard') {
+                const hx = 0.14, hy = 0.1, hz = 0.14;
+                const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz) * 0.35);
+                body = new CANNON.Body({ mass: m, shape: new CANNON.Box(new CANNON.Vec3(hx, hy, hz)) });
+                if (massOverride instanceof CANNON.Vec3) {
+                    body.velocity.copy(massOverride);
+                    body.velocity.x += (Math.random() - 0.5) * 4;
+                    body.velocity.y += (Math.random() - 0.5) * 4;
+                    body.velocity.z += (Math.random() - 0.5) * 4;
+                }
+                mesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2),
+                    new THREE.MeshStandardMaterial({
+                        color: 0xe0f2fe,
+                        transparent: true,
+                        opacity: 0.55,
+                        roughness: 0.12,
+                        side: THREE.DoubleSide
+                    })
+                );
             } else if (type === 'bouncer') {
                 const hx = 1.2, hy = 0.2, hz = 1.2;
                 const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz) * 1.15);
@@ -1432,6 +3103,98 @@
                 flame.position.y = -0.48;
                 flame.rotation.z = Math.PI;
                 mesh.add(fus, nose, flame);
+            } else if (type === 'explosive_rocket') {
+                const m = resolveMassOverride(massOverride,
+                    massFromCylinder(0.14, 0.12, 0.65) + massFromSphere(0.18));
+                body = new CANNON.Body({ mass: m });
+                body.addShape(new CANNON.Cylinder(0.14, 0.12, 0.65, 10));
+                body.addShape(new CANNON.Sphere(0.18), new CANNON.Vec3(0, 0.42, 0));
+                mesh = new THREE.Group();
+                const fus = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.14, 0.12, 0.65, 12),
+                    new THREE.MeshStandardMaterial({ color: 0x57534e, metalness: 0.4, roughness: 0.42 })
+                );
+                const band = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.145, 0.028, 6, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0xca8a04, emissiveIntensity: 0.35 })
+                );
+                band.rotation.x = Math.PI / 2;
+                band.position.y = 0.12;
+                const nose = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.18, 0.38, 12),
+                    new THREE.MeshStandardMaterial({ color: 0xf97316, metalness: 0.25, roughness: 0.38 })
+                );
+                nose.position.y = 0.48;
+                const flame = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.1, 0.22, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xb91c1c, emissiveIntensity: 0.5 })
+                );
+                flame.position.y = -0.48;
+                flame.rotation.z = Math.PI;
+                mesh.add(fus, band, nose, flame);
+                body.addEventListener('collide', (e) => {
+                    const other = e.contact.bi === body ? e.contact.bj : e.contact.bi;
+                    if (!other || other === holderBody) return;
+                    const currentObj = objectsToUpdate.find(o => o.body === body);
+                    if (!currentObj || currentObj.type !== 'explosive_rocket') return;
+                    if (!currentObj.rocketThrustOn || !currentObj.explosiveRocketArmedAt) return;
+                    if (!currentObj.rocketLauncherFired) {
+                        const elapsed = performance.now() / 1000 - currentObj.explosiveRocketArmedAt;
+                        if (elapsed < EXPLOSIVE_ROCKET_IMPACT_ARM_SEC) return;
+                    }
+                    queueBarrelDetonation(currentObj);
+                });
+            } else if (type === 'buggy') {
+                const hx = 1.1, hy = 0.34, hz = 0.5;
+                const m = resolveMassOverride(massOverride, 285);
+                body = new CANNON.Body({ mass: m, angularDamping: 0.16, linearDamping: 0.06 });
+                body.addShape(new CANNON.Box(new CANNON.Vec3(hx, hy, hz)));
+                mesh = new THREE.Group();
+                const carBodyMat = new THREE.MeshStandardMaterial({ color: 0xc2410c, metalness: 0.28, roughness: 0.52 });
+                const cabin = new THREE.Mesh(new THREE.BoxGeometry(hx * 2 * 0.92, hy * 2.2, hz * 2 * 0.88), carBodyMat);
+                cabin.position.set(-0.06, hy * 0.45, 0);
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(hx * 2 * 0.55, hy * 0.35, hz * 2 * 0.75), new THREE.MeshStandardMaterial({ color: 0x1c1917, metalness: 0.2, roughness: 0.65 }));
+                roof.position.set(-0.15, hy * 1.35, 0);
+                const bumperF = new THREE.Mesh(new THREE.BoxGeometry(hx * 0.55, hy * 0.55, hz * 2 * 0.2), new THREE.MeshStandardMaterial({ color: 0x292524 }));
+                bumperF.position.set(hx * 0.72, -hy * 0.25, 0);
+                mesh.add(cabin, roof, bumperF);
+                if (typeof CANNON.RaycastVehicle === 'function') {
+                    buggyRaycastVehicle = new CANNON.RaycastVehicle({
+                        chassisBody: body,
+                        indexForwardAxis: 0,
+                        indexRightAxis: 2,
+                        indexUpAxis: 1
+                    });
+                    const rW = 0.34;
+                    const addWheelAt = (cx, cz) => buggyRaycastVehicle.addWheel({
+                        radius: rW,
+                        directionLocal: new CANNON.Vec3(0, -1, 0),
+                        suspensionStiffness: 26,
+                        suspensionRestLength: 0.48,
+                        maxSuspensionTravel: 0.32,
+                        frictionSlip: 2.05,
+                        dampingRelaxation: 2.45,
+                        dampingCompression: 4.05,
+                        maxSuspensionForce: 100000,
+                        rollInfluence: 0.065,
+                        axleLocal: new CANNON.Vec3(0, 0, -1),
+                        chassisConnectionPointLocal: new CANNON.Vec3(cx, -hy * 0.12, cz),
+                        useCustomSlidingRotationalSpeed: true,
+                        customSlidingRotationalSpeed: -0.032
+                    });
+                    addWheelAt(hx - 0.2, hz - 0.05);
+                    addWheelAt(hx - 0.2, -hz + 0.05);
+                    addWheelAt(-hx + 0.36, hz - 0.05);
+                    addWheelAt(-hx + 0.36, -hz + 0.05);
+                    const wMat = new THREE.MeshStandardMaterial({ color: 0x1c1917, roughness: 0.88, metalness: 0.15 });
+                    for (let wi = 0; wi < 4; wi++) {
+                        const wm = new THREE.Mesh(new THREE.CylinderGeometry(rW, rW, 0.2, 14), wMat);
+                        wm.rotation.z = Math.PI / 2;
+                        buggyWheelMeshes.push(wm);
+                        scene.add(wm);
+                    }
+                }
+                body.material = defaultContactMaterial;
             } else if (type === 'npc') {
                 const hx = 0.18, hy = 0.5, hz = 0.14;
                 const m = resolveMassOverride(massOverride, massFromBox(hx, hy, hz));
@@ -1464,6 +3227,26 @@
                 mouth.rotation.y = Math.PI;
                 mouth.position.set(0, 0.45, 0.17);
                 mesh.add(torso, head, eyeL, eyeR, mouth);
+            } else if (type === 'explosive_barrel') {
+                const rCyl = 0.38, h = 0.9;
+                const m = resolveMassOverride(massOverride, massFromCylinder(rCyl, rCyl, h) * 1.08);
+                body = new CANNON.Body({ mass: m });
+                body.addShape(new CANNON.Cylinder(rCyl, rCyl, h, 14));
+                mesh = new THREE.Group();
+                const wood = new THREE.MeshStandardMaterial({ color: 0x713f12, roughness: 0.88 });
+                const band = new THREE.MeshStandardMaterial({ color: 0xb91c1c, metalness: 0.22, roughness: 0.52 });
+                const cyl = new THREE.Mesh(new THREE.CylinderGeometry(rCyl, rCyl, h, 18), wood);
+                const ring = new THREE.Mesh(new THREE.TorusGeometry(rCyl * 1.02, 0.042, 8, 22), band);
+                ring.rotation.x = Math.PI / 2;
+                ring.position.y = h * 0.14;
+                const ring2 = ring.clone();
+                ring2.position.y = -h * 0.2;
+                mesh.add(cyl, ring, ring2);
+                body.addEventListener('collide', (e) => {
+                    if (Math.abs(e.contact.getImpactVelocityAlongNormal()) <= BARREL_IMPACT_EXPLODE_VEL) return;
+                    const currentObj = objectsToUpdate.find(o => o.body === body);
+                    if (currentObj) queueBarrelDetonation(currentObj);
+                });
             } else if (type === 'free_balloon') {
                 const r = 0.11;
                 const m = resolveMassOverride(massOverride, massFromSphere(r) * 0.22);
@@ -1486,7 +3269,11 @@
             if (body && mesh) {
                 body.position.copy(pos);
                 if (rot) body.quaternion.copy(rot);
-                world.addBody(body);
+                if (type === 'buggy' && buggyRaycastVehicle) {
+                    buggyRaycastVehicle.addToWorld(world);
+                } else {
+                    world.addBody(body);
+                }
                 mesh.traverse(child => { 
                     if(child.isMesh) { 
                         child.castShadow = child.receiveShadow = true; 
@@ -1497,11 +3284,27 @@
                 const phyObj = {
                     mesh, body, type,
                     rocketThrustOn: false,
+                    explosiveRocketArmedAt: 0,
+                    rocketLauncherFired: false,
                     balloonLiftKg: type === 'free_balloon' ? STANDARD_SPHERE_MASS * 2.2 : 0,
                     balloonAttachments: [],
                     isFreeBalloon: type === 'free_balloon',
                     isNpc: type === 'npc',
-                    footClearance: wedgeMinY != null ? Math.max(0.12, -wedgeMinY + GROUND_EPS * 2) : footClearanceFromType(type)
+                    footClearance: wedgeMinY != null ? Math.max(0.12, -wedgeMinY + GROUND_EPS * 2) : footClearanceFromType(type),
+                    debrisExpireAt: (type === 'debris' || type === 'feather' || type === 'glass_shard')
+                        ? (performance.now() / 1000 + DEBRIS_LIFETIME_SEC) : null,
+                    raycastVehicle: type === 'buggy' ? buggyRaycastVehicle : null,
+                    wheelMeshes: type === 'buggy' ? buggyWheelMeshes : null,
+                    driveFallback: type === 'buggy' && !buggyRaycastVehicle,
+                    driverSeatLocal: type === 'buggy' ? new CANNON.Vec3(-0.32, 0.34 + PLAYER_HALF_HEIGHT + 0.08, 0) : null,
+                    customGravityMag: null,
+                    customFriction: null,
+                    paintColor: null,
+                    paintMetal: null,
+                    paintRough: null,
+                    igniteUntil: null,
+                    igniteDetonate: false,
+                    _igniteLight: null
                 };
                 phyObj.massLabel = createMassLabelSpriteForBody(body, -phyObj.footClearance - 0.1);
                 phyObj.mesh.add(phyObj.massLabel);
@@ -1583,7 +3386,7 @@
             return obj;
         }
 
-        function toggleRocketThrustAtCrosshair() {
+        function handleFKeyAtCrosshair() {
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             const bodies = objectsToUpdate.map(o => o.mesh);
             const intersects = raycaster.intersectObjects(bodies, true);
@@ -1594,68 +3397,864 @@
                     o.mesh.traverse(c => { if (c === hit.object) obj = o; });
                     if (o.mesh === hit.object) obj = o;
                 });
-                if (obj && obj.type === 'rocket' && obj.body.mass > 0) {
+                if (!obj || obj.body.mass <= 0) continue;
+                if (obj.type === 'explosive_barrel') {
+                    const p = obj.body.position.clone();
+                    removeObject(obj);
+                    triggerExplosionChain(p);
+                    return;
+                }
+                if (obj.type === 'rocket' || obj.type === 'explosive_rocket') {
                     obj.rocketThrustOn = !obj.rocketThrustOn;
+                    if (obj.type === 'explosive_rocket') {
+                        if (obj.rocketThrustOn) obj.explosiveRocketArmedAt = performance.now() / 1000;
+                        else obj.explosiveRocketArmedAt = 0;
+                    }
                     return;
                 }
             }
         }
 
-        function applyDebugScale(obj, factor) {
-            if (!obj || !obj.body || obj.body.shapes.length !== 1) return;
+        function getObjectResizeInfo(obj) {
+            if (!obj || !obj.body || obj.body.shapes.length !== 1) return null;
             const sh = obj.body.shapes[0];
-            const volScale = factor * factor * factor;
-            if (sh.halfExtents) {
-                sh.halfExtents.x *= factor;
-                sh.halfExtents.y *= factor;
-                sh.halfExtents.z *= factor;
-                obj.body.mass *= volScale;
-                obj.body.updateMassProperties();
-                obj.mesh.scale.multiplyScalar(factor);
-                obj.footClearance *= factor;
-            } else if (typeof sh.radius === 'number') {
-                sh.radius *= factor;
-                obj.body.mass *= volScale;
-                obj.body.updateMassProperties();
-                obj.mesh.scale.multiplyScalar(factor);
-                obj.footClearance *= factor;
+            if (sh.halfExtents && typeof sh.halfExtents.x === 'number') {
+                return {
+                    kind: 'box',
+                    hx: sh.halfExtents.x,
+                    hy: sh.halfExtents.y,
+                    hz: sh.halfExtents.z
+                };
             }
+            if (typeof sh.radius === 'number') {
+                return { kind: 'sphere', r: sh.radius };
+            }
+            return null;
+        }
+
+        /** Replace box collider so Cannon rebuilds AABB / contact data (mutating halfExtents alone is unreliable). */
+        function replaceBodyBoxShape(body, hx, hy, hz) {
+            if (!body || !body.shapes.length) return null;
+            const oldShape = body.shapes[0];
+            const off = body.shapeOffsets[0];
+            const offset = off ? new CANNON.Vec3(off.x, off.y, off.z) : new CANNON.Vec3(0, 0, 0);
+            const oq = body.shapeOrientations[0];
+            const orient = oq
+                ? new CANNON.Quaternion(oq.x, oq.y, oq.z, oq.w)
+                : new CANNON.Quaternion();
+            body.removeShape(oldShape);
+            const newShape = new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+            body.addShape(newShape, offset, orient);
+            body.updateMassProperties();
+            body.updateBoundingRadius();
+            body.aabbNeedsUpdate = true;
+            body.wakeUp();
+            return newShape;
+        }
+
+        function replaceBodySphereShape(body, r) {
+            if (!body || !body.shapes.length) return null;
+            const oldShape = body.shapes[0];
+            const off = body.shapeOffsets[0];
+            const offset = off ? new CANNON.Vec3(off.x, off.y, off.z) : new CANNON.Vec3(0, 0, 0);
+            const oq = body.shapeOrientations[0];
+            const orient = oq
+                ? new CANNON.Quaternion(oq.x, oq.y, oq.z, oq.w)
+                : new CANNON.Quaternion();
+            body.removeShape(oldShape);
+            const newShape = new CANNON.Sphere(r);
+            body.addShape(newShape, offset, orient);
+            body.updateMassProperties();
+            body.updateBoundingRadius();
+            body.aabbNeedsUpdate = true;
+            body.wakeUp();
+            return newShape;
+        }
+
+        function syncCollisionAfterResize(obj) {
+            if (!obj || !obj.body) return;
+            if (weldedObjects.has(obj)) syncWeldSnapFromBody(obj);
             refreshMassLabel(obj);
         }
 
-        function onMouseMove() {
-            if (!controls.isLocked || !debugDragMode || !debugDragging || debugTool !== 'move' || !grabbedObject) return;
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            const hits = raycaster.intersectObjects(spawnableMeshes);
-            let target;
-            if (hits.length > 0) {
-                const hit = hits[0];
-                target = hit.point.clone();
-                const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize();
-                const lift = getObjectFootClearance(grabbedObject);
-                target.addScaledVector(n, lift + GROUND_EPS * 0.5);
-            } else {
-                const d = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                target = camera.position.clone().add(d.multiplyScalar(grabDist));
+        function beginResizeSession(obj) {
+            const info = getObjectResizeInfo(obj);
+            if (!info) return false;
+            obj._resizeSession = {
+                kind: info.kind,
+                hx: info.kind === 'box' ? info.hx : info.r,
+                hy: info.kind === 'box' ? info.hy : info.r,
+                hz: info.kind === 'box' ? info.hz : info.r,
+                r: info.kind === 'sphere' ? info.r : null,
+                meshScale: obj.mesh.scale.clone(),
+                mass: obj.body.mass
+            };
+            return true;
+        }
+
+        function setObjectBoxHalfExtents(obj, hx, hy, hz) {
+            const info = getObjectResizeInfo(obj);
+            if (!info || info.kind !== 'box') return false;
+            const s = obj._resizeSession;
+            const oldHx = info.hx;
+            const oldHy = info.hy;
+            const oldHz = info.hz;
+            hx = Math.max(RESIZE_MIN_HALF, Math.min(RESIZE_MAX_HALF, hx));
+            hy = Math.max(RESIZE_MIN_HALF, Math.min(RESIZE_MAX_HALF, hy));
+            hz = Math.max(RESIZE_MIN_HALF, Math.min(RESIZE_MAX_HALF, hz));
+            replaceBodyBoxShape(obj.body, hx, hy, hz);
+            const oldVol = oldHx * oldHy * oldHz;
+            const newVol = hx * hy * hz;
+            if (oldVol > 1e-8 && s) {
+                obj.body.mass = s.mass * (newVol / oldVol);
+                obj.body.updateMassProperties();
             }
-            const minY = GROUND_Y + getObjectFootClearance(grabbedObject) + GROUND_EPS;
-            target.y = Math.max(target.y, minY);
-            grabbedObject.body.position.set(target.x, target.y, target.z);
-            grabbedObject.body.velocity.set(0, 0, 0);
-            grabbedObject.body.angularVelocity.set(0, 0, 0);
+            if (s) {
+                obj.mesh.scale.x = s.meshScale.x * (hx / s.hx);
+                obj.mesh.scale.y = s.meshScale.y * (hy / s.hy);
+                obj.mesh.scale.z = s.meshScale.z * (hz / s.hz);
+            }
+            obj.footClearance = Math.max(hy, 0.12);
+            syncCollisionAfterResize(obj);
+            clampBodyBottomAboveGround(obj);
+            return true;
+        }
+
+        function setObjectSphereRadius(obj, r) {
+            const info = getObjectResizeInfo(obj);
+            if (!info || info.kind !== 'sphere') return false;
+            const s = obj._resizeSession;
+            const oldR = info.r;
+            r = Math.max(RESIZE_MIN_HALF, Math.min(RESIZE_MAX_HALF, r));
+            replaceBodySphereShape(obj.body, r);
+            const ratio = r / Math.max(oldR, 1e-6);
+            if (s) {
+                obj.body.mass = s.mass * Math.pow(ratio, 3);
+                obj.mesh.scale.set(s.meshScale.x * ratio, s.meshScale.y * ratio, s.meshScale.z * ratio);
+            } else {
+                obj.body.mass *= Math.pow(ratio, 3);
+                obj.mesh.scale.multiplyScalar(ratio);
+            }
+            obj.body.updateMassProperties();
+            obj.footClearance = Math.max(r, 0.12);
+            syncCollisionAfterResize(obj);
+            clampBodyBottomAboveGround(obj);
+            return true;
+        }
+
+        function applyResizeAxisDelta(obj, axisId, deltaWorld) {
+            const info = getObjectResizeInfo(obj);
+            if (!info || !obj._resizeSession) return;
+            if (info.kind === 'sphere') {
+                const sign = axisId.indexOf('+') >= 0 ? 1 : -1;
+                setObjectSphereRadius(obj, info.r + sign * deltaWorld);
+                return;
+            }
+            let hx = info.hx;
+            let hy = info.hy;
+            let hz = info.hz;
+            const sign = axisId.indexOf('+') >= 0 ? 1 : -1;
+            const d = deltaWorld * sign;
+            if (axisId.charAt(0) === 'x') hx += d;
+            else if (axisId.charAt(0) === 'y') hy += d;
+            else hz += d;
+            setObjectBoxHalfExtents(obj, hx, hy, hz);
+        }
+
+        function applyResizeUniformScale(obj, factor) {
+            const info = getObjectResizeInfo(obj);
+            if (!info) return;
+            if (!obj._resizeSession) beginResizeSession(obj);
+            if (info.kind === 'box') {
+                setObjectBoxHalfExtents(obj, info.hx * factor, info.hy * factor, info.hz * factor);
+            } else {
+                setObjectSphereRadius(obj, info.r * factor);
+            }
+            beginResizeSession(obj);
+        }
+
+        function initResizeGizmoSystem() {
+            if (resizeGizmoGroup || !scene) return;
+            resizeGizmoGroup = new THREE.Group();
+            resizeGizmoGroup.visible = false;
+            const axisDefs = [
+                { id: 'x+', pos: [1, 0, 0], color: 0xef4444 },
+                { id: 'x-', pos: [-1, 0, 0], color: 0xb91c1c },
+                { id: 'y+', pos: [0, 1, 0], color: 0x22c55e },
+                { id: 'y-', pos: [0, -1, 0], color: 0x15803d },
+                { id: 'z+', pos: [0, 0, 1], color: 0x3b82f6 },
+                { id: 'z-', pos: [0, 0, -1], color: 0x1d4ed8 }
+            ];
+            axisDefs.forEach(def => {
+                const mat = new THREE.MeshBasicMaterial({
+                    color: def.color,
+                    depthTest: false,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                const h = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+                h.userData.resizeAxis = def.id;
+                h.userData.resizeSign = new THREE.Vector3(def.pos[0], def.pos[1], def.pos[2]);
+                h.renderOrder = 999;
+                resizeGizmoGroup.add(h);
+                resizeHandlePickables.push(h);
+            });
+            scene.add(resizeGizmoGroup);
+        }
+
+        const SELECT_GIZMO_ARROW_LEN = 1.05;
+        const SELECT_GIZMO_RING_RADIUS = 1.15;
+        const SELECT_GIZMO_RING_TUBE = 0.05;
+        const SELECT_GIZMO_RING_PICK_TUBE = 0.26;
+
+        function initSelectGizmoSystem() {
+            if (moveGizmoGroup || !scene) return;
+            moveGizmoGroup = new THREE.Group();
+            moveGizmoGroup.visible = false;
+            rotateGizmoGroup = new THREE.Group();
+            rotateGizmoGroup.visible = false;
+
+            const moveDefs = [
+                { id: 'x+', axis: 'x', sign: 1, color: 0xef4444 },
+                { id: 'x-', axis: 'x', sign: -1, color: 0xb91c1c },
+                { id: 'y+', axis: 'y', sign: 1, color: 0x22c55e },
+                { id: 'y-', axis: 'y', sign: -1, color: 0x15803d },
+                { id: 'z+', axis: 'z', sign: 1, color: 0x3b82f6 },
+                { id: 'z-', axis: 'z', sign: -1, color: 0x1d4ed8 }
+            ];
+            moveDefs.forEach(def => {
+                const mat = new THREE.MeshBasicMaterial({
+                    color: def.color,
+                    depthTest: false,
+                    transparent: true,
+                    opacity: 0.95
+                });
+                const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.62), mat);
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.16), mat);
+                const g = new THREE.Group();
+                const dist = SELECT_GIZMO_ARROW_LEN * 0.5;
+                const tip = SELECT_GIZMO_ARROW_LEN * 0.92;
+                if (def.axis === 'x') {
+                    shaft.position.set(def.sign * dist, 0, 0);
+                    head.position.set(def.sign * tip, 0, 0);
+                    shaft.rotation.y = Math.PI / 2;
+                } else if (def.axis === 'y') {
+                    shaft.position.set(0, def.sign * dist, 0);
+                    head.position.set(0, def.sign * tip, 0);
+                } else {
+                    shaft.position.set(0, 0, def.sign * dist);
+                    head.position.set(0, 0, def.sign * tip);
+                    shaft.rotation.x = Math.PI / 2;
+                }
+                shaft.userData.gizmoKind = 'move';
+                shaft.userData.gizmoAxis = def.id;
+                head.userData.gizmoKind = 'move';
+                head.userData.gizmoAxis = def.id;
+                g.add(shaft);
+                g.add(head);
+                shaft.renderOrder = head.renderOrder = 998;
+                moveGizmoGroup.add(g);
+                moveGizmoPickables.push(shaft, head);
+            });
+
+            const rotDefs = [
+                { axis: 'x', color: 0xef4444, rot: [0, Math.PI / 2, 0] },
+                { axis: 'y', color: 0x22c55e, rot: [Math.PI / 2, 0, 0] },
+                { axis: 'z', color: 0x3b82f6, rot: [0, 0, 0] }
+            ];
+            const pickMat = new THREE.MeshBasicMaterial({
+                transparent: true,
+                opacity: 0.001,
+                depthTest: false,
+                depthWrite: false
+            });
+            rotDefs.forEach(def => {
+                const mat = new THREE.MeshBasicMaterial({
+                    color: def.color,
+                    depthTest: false,
+                    transparent: true,
+                    opacity: 0.9,
+                    side: THREE.DoubleSide
+                });
+                const ring = new THREE.Mesh(
+                    new THREE.TorusGeometry(SELECT_GIZMO_RING_RADIUS, SELECT_GIZMO_RING_TUBE, 12, 56),
+                    mat
+                );
+                ring.rotation.set(def.rot[0], def.rot[1], def.rot[2]);
+                ring.userData.gizmoKind = 'rotate';
+                ring.userData.gizmoAxis = def.axis;
+                ring.renderOrder = 997;
+                const pickRing = new THREE.Mesh(
+                    new THREE.TorusGeometry(SELECT_GIZMO_RING_RADIUS, SELECT_GIZMO_RING_PICK_TUBE, 10, 40),
+                    pickMat
+                );
+                pickRing.rotation.set(def.rot[0], def.rot[1], def.rot[2]);
+                pickRing.userData.gizmoKind = 'rotate';
+                pickRing.userData.gizmoAxis = def.axis;
+                rotateGizmoGroup.add(pickRing);
+                rotateGizmoGroup.add(ring);
+                rotateGizmoPickables.push(pickRing);
+            });
+
+            scene.add(moveGizmoGroup);
+            scene.add(rotateGizmoGroup);
+        }
+
+        function getSelectGizmoScale() {
+            const dist = camera.position.distanceTo(selectDragPivot);
+            return Math.max(0.85, Math.min(3.2, dist * 0.11));
+        }
+
+        function updateSelectGizmoVisual() {
+            const moveOn = !!(controls && controls.isLocked && debugDragMode && debugTool === 'move' && selectedObjects.size > 0);
+            const rotOn = !!(controls && controls.isLocked && debugDragMode && debugTool === 'rotate' && selectedObjects.size > 0);
+            if (moveGizmoGroup) moveGizmoGroup.visible = moveOn;
+            if (rotateGizmoGroup) rotateGizmoGroup.visible = rotOn;
+            if (!moveOn && !rotOn) return;
+            getSelectionCenterVec3(selectDragPivot);
+            const s = getSelectGizmoScale();
+            if (moveOn) {
+                moveGizmoGroup.position.copy(selectDragPivot);
+                moveGizmoGroup.quaternion.identity();
+                moveGizmoGroup.scale.setScalar(s);
+            }
+            if (rotOn) {
+                rotateGizmoGroup.position.copy(selectDragPivot);
+                rotateGizmoGroup.quaternion.identity();
+                rotateGizmoGroup.scale.setScalar(s);
+            }
+        }
+
+        function pickMoveGizmoHandle() {
+            if (!moveGizmoGroup || !moveGizmoGroup.visible) return null;
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects(moveGizmoPickables, false);
+            return hits.length ? hits[0].object : null;
+        }
+
+        function pickRotateGizmoHandle() {
+            if (!rotateGizmoGroup || !rotateGizmoGroup.visible) return null;
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects(rotateGizmoPickables, false);
+            if (hits.length) return hits[0].object;
+            const hits2 = raycaster.intersectObjects(rotateGizmoGroup.children, true);
+            for (let i = 0; i < hits2.length; i++) {
+                if (hits2[i].object.userData.gizmoAxis) return hits2[i].object;
+            }
+            return null;
+        }
+
+        function worldAxisUnitFromGizmoId(axisId, out) {
+            const c = axisId.charAt(0);
+            const sign = axisId.indexOf('+') >= 0 ? 1 : -1;
+            out.set(
+                c === 'x' ? sign : 0,
+                c === 'y' ? sign : 0,
+                c === 'z' ? sign : 0
+            );
+            return out;
+        }
+
+        function screenWorldAxisDragDelta(center, axisWorld, movementX, movementY) {
+            _resizeScrA.copy(center).project(camera);
+            _resizeScrB.copy(center).add(axisWorld).project(camera);
+            const sx = (_resizeScrB.x - _resizeScrA.x) * window.innerWidth * 0.5;
+            const sy = (_resizeScrB.y - _resizeScrA.y) * window.innerHeight * 0.5;
+            const len = Math.sqrt(sx * sx + sy * sy) || 1;
+            const along = (movementX * sx + (-movementY) * sy) / len;
+            const dist = camera.position.distanceTo(center);
+            return along * dist * 0.0022;
+        }
+
+        /** Screen-space drag projected onto the ring tangent (Roblox-style ring drag). */
+        function screenWorldAxisRotateDelta(center, axisChar, movementX, movementY) {
+            if (axisChar === 'x') _gizmoRotAxis.set(1, 0, 0);
+            else if (axisChar === 'y') _gizmoRotAxis.set(0, 1, 0);
+            else _gizmoRotAxis.set(0, 0, 1);
+
+            _resizeScrA.set(center.x, center.y, center.z);
+            camera.getWorldDirection(_gizmoViewDir);
+            _gizmoRotTangent.crossVectors(_gizmoRotAxis, _gizmoViewDir);
+            if (_gizmoRotTangent.lengthSq() < 1e-6) {
+                _gizmoRotTangent.crossVectors(_gizmoRotAxis, new THREE.Vector3(0, 1, 0));
+            }
+            _gizmoRotTangent.normalize();
+
+            _resizeScrB.copy(_resizeScrA).add(_gizmoRotTangent);
+            _resizeScrA.project(camera);
+            _resizeScrB.project(camera);
+            const tx = (_resizeScrB.x - _resizeScrA.x) * window.innerWidth * 0.5;
+            const ty = (_resizeScrB.y - _resizeScrA.y) * window.innerHeight * 0.5;
+            const len = Math.sqrt(tx * tx + ty * ty) || 1;
+            const along = (movementX * tx + (-movementY) * ty) / len;
+            const dist = camera.position.distanceTo(_resizeScrA);
+            return along * Math.max(dist * 0.0065, 0.005);
+        }
+
+        function updateResizeGizmoVisual() {
+            if (!resizeGizmoGroup) return;
+            const show = !!(controls && controls.isLocked && debugDragMode && debugTool === 'resize' && debugResizeTarget);
+            resizeGizmoGroup.visible = show;
+            if (!show) return;
+            const obj = debugResizeTarget;
+            const info = getObjectResizeInfo(obj);
+            if (!info) {
+                resizeGizmoGroup.visible = false;
+                return;
+            }
+            resizeGizmoGroup.position.copy(obj.body.position);
+            resizeGizmoGroup.quaternion.copy(obj.body.quaternion);
+            let hx, hy, hz;
+            if (info.kind === 'box') {
+                hx = info.hx;
+                hy = info.hy;
+                hz = info.hz;
+            } else {
+                hx = hy = hz = info.r;
+            }
+            const handleSize = Math.max(0.16, Math.min(0.52, Math.min(hx, hy, hz) * 0.26));
+            for (let i = 0; i < resizeHandlePickables.length; i++) {
+                const h = resizeHandlePickables[i];
+                const s = h.userData.resizeSign;
+                h.position.set(s.x * hx, s.y * hy, s.z * hz);
+                h.scale.set(handleSize, handleSize, handleSize);
+            }
+        }
+
+        function pickResizeHandleFromRay() {
+            if (!resizeGizmoGroup || !resizeGizmoGroup.visible) return null;
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects(resizeHandlePickables, false);
+            if (hits.length) return hits[0].object;
+            const hits2 = raycaster.intersectObjects(resizeGizmoGroup.children, true);
+            for (let i = 0; i < hits2.length; i++) {
+                if (hits2[i].object.userData.resizeAxis) return hits2[i].object;
+            }
+            return null;
+        }
+
+        function screenAxisDragDelta(axisId, movementX, movementY) {
+            const obj = debugResizeTarget;
+            if (!obj) return 0;
+            const body = obj.body;
+            _resizeAxisWorld.set(0, 0, 0);
+            if (axisId.charAt(0) === 'x') _resizeAxisWorld.x = axisId.indexOf('+') >= 0 ? 1 : -1;
+            else if (axisId.charAt(0) === 'y') _resizeAxisWorld.y = axisId.indexOf('+') >= 0 ? 1 : -1;
+            else _resizeAxisWorld.z = axisId.indexOf('+') >= 0 ? 1 : -1;
+            _resizeAxisWorld.applyQuaternion(body.quaternion);
+            const center = body.position;
+            _resizeScrA.set(center.x, center.y, center.z);
+            _resizeScrB.copy(_resizeScrA).add(_resizeAxisWorld);
+            _resizeScrA.project(camera);
+            _resizeScrB.project(camera);
+            const sx = (_resizeScrB.x - _resizeScrA.x) * window.innerWidth * 0.5;
+            const sy = (_resizeScrB.y - _resizeScrA.y) * window.innerHeight * 0.5;
+            const len = Math.sqrt(sx * sx + sy * sy) || 1;
+            const along = (movementX * sx + (-movementY) * sy) / len;
+            const dist = camera.position.distanceTo(_resizeScrA);
+            return along * dist * 0.0022;
+        }
+
+        function clearResizeTarget() {
+            debugResizeTarget = null;
+            resizeDragging = false;
+            resizeDragAxis = null;
+            if (resizeGizmoGroup) resizeGizmoGroup.visible = false;
+        }
+
+        function selectResizeTarget(obj) {
+            if (!obj || !obj.body || obj.body.mass <= 0 || !getObjectResizeInfo(obj)) {
+                clearResizeTarget();
+                return false;
+            }
+            debugResizeTarget = obj;
+            beginResizeSession(obj);
+            if (weldedObjects.has(obj)) syncWeldSnapFromBody(obj);
+            return true;
+        }
+
+        function setObjectSelectedHighlight(obj, on) {
+            if (!obj || !obj.mesh) return;
+            obj.mesh.traverse(c => {
+                if (!c.isMesh || !c.material) return;
+                const mats = Array.isArray(c.material) ? c.material : [c.material];
+                mats.forEach(m => {
+                    if (!m.emissive) return;
+                    if (!obj._selEmissiveStore) obj._selEmissiveStore = new Map();
+                    if (on) {
+                        if (!obj._selEmissiveStore.has(m)) {
+                            obj._selEmissiveStore.set(m, {
+                                hex: m.emissive.getHex(),
+                                intensity: m.emissiveIntensity != null ? m.emissiveIntensity : 0
+                            });
+                        }
+                        m.emissive.setHex(0xfbbf24);
+                        m.emissiveIntensity = 0.38;
+                    } else if (obj._selEmissiveStore && obj._selEmissiveStore.has(m)) {
+                        const prev = obj._selEmissiveStore.get(m);
+                        m.emissive.setHex(prev.hex);
+                        m.emissiveIntensity = prev.intensity;
+                        obj._selEmissiveStore.delete(m);
+                    }
+                });
+            });
+        }
+
+        function clearSelection() {
+            selectedObjects.forEach(o => setObjectSelectedHighlight(o, false));
+            selectedObjects.clear();
+        }
+
+        function addToSelection(obj) {
+            if (!obj || !obj.body || obj.body.mass <= 0) return;
+            if (selectedObjects.has(obj)) return;
+            selectedObjects.add(obj);
+            setObjectSelectedHighlight(obj, true);
+        }
+
+        function removeFromSelection(obj) {
+            if (!selectedObjects.has(obj)) return;
+            selectedObjects.delete(obj);
+            setObjectSelectedHighlight(obj, false);
+        }
+
+        function toggleSelectObject(obj) {
+            if (!obj || !obj.body || obj.body.mass <= 0) return;
+            if (selectedObjects.has(obj)) removeFromSelection(obj);
+            else addToSelection(obj);
+            if (debugDragMode && debugTool === 'select') updateDragModeHud();
+        }
+
+        function syncWeldSnapFromBody(obj) {
+            if (!weldedObjects.has(obj)) return;
+            const w = weldedObjects.get(obj);
+            w.pos.copy(obj.body.position);
+            w.quat.copy(obj.body.quaternion);
+        }
+
+        function getSelectionCenterVec3(out) {
+            out.set(0, 0, 0);
+            let n = 0;
+            selectedObjects.forEach(o => {
+                if (!o.body || o.body.mass <= 0) return;
+                out.x += o.body.position.x;
+                out.y += o.body.position.y;
+                out.z += o.body.position.z;
+                n++;
+            });
+            if (n > 0) out.multiplyScalar(1 / n);
+            return out;
+        }
+
+        function updateSelectMarqueeVisual() {
+            const el = document.getElementById('select-marquee');
+            if (!el) return;
+            if (!selectMarqueeActive) {
+                el.style.display = 'none';
+                return;
+            }
+            const cx = window.innerWidth * 0.5;
+            const cy = window.innerHeight * 0.5;
+            const ex = cx + selectMarqueePx.x;
+            const ey = cy + selectMarqueePx.y;
+            const left = Math.min(cx, ex);
+            const top = Math.min(cy, ey);
+            const w = Math.abs(ex - cx);
+            const h = Math.abs(ey - cy);
+            if (w < 3 && h < 3) {
+                el.style.display = 'none';
+                return;
+            }
+            el.style.display = 'block';
+            el.style.left = left + 'px';
+            el.style.top = top + 'px';
+            el.style.width = w + 'px';
+            el.style.height = h + 'px';
+        }
+
+        function finishSelectMarquee(addToExisting) {
+            const cx = window.innerWidth * 0.5;
+            const cy = window.innerHeight * 0.5;
+            const ex = cx + selectMarqueePx.x;
+            const ey = cy + selectMarqueePx.y;
+            const left = Math.min(cx, ex);
+            const right = Math.max(cx, ex);
+            const top = Math.min(cy, ey);
+            const bottom = Math.max(cy, ey);
+            if (right - left < 4 && bottom - top < 4) return;
+            const picked = [];
+            objectsToUpdate.forEach(o => {
+                if (!o.body || o.body.mass <= 0) return;
+                _selObjNDC.set(o.body.position.x, o.body.position.y, o.body.position.z).project(camera);
+                if (_selObjNDC.z > 1) return;
+                const sx = (_selObjNDC.x * 0.5 + 0.5) * window.innerWidth;
+                const sy = (-_selObjNDC.y * 0.5 + 0.5) * window.innerHeight;
+                if (sx >= left && sx <= right && sy >= top && sy <= bottom) picked.push(o);
+            });
+            if (!addToExisting) clearSelection();
+            picked.forEach(addToSelection);
+            if (debugDragMode && debugTool === 'select') updateDragModeHud();
+        }
+
+        function beginSelectTransformSnapshots() {
+            getSelectionCenterVec3(selectDragPivot);
+            selectDragSnapshots = new Map();
+            selectDragAccumAngle = 0;
+            selectedObjects.forEach(obj => {
+                if (!obj.body || obj.body.mass <= 0) return;
+                const p = obj.body.position;
+                const rel = new THREE.Vector3(
+                    p.x - selectDragPivot.x,
+                    p.y - selectDragPivot.y,
+                    p.z - selectDragPivot.z
+                );
+                const sq = new THREE.Quaternion(
+                    obj.body.quaternion.x,
+                    obj.body.quaternion.y,
+                    obj.body.quaternion.z,
+                    obj.body.quaternion.w
+                );
+                selectDragSnapshots.set(obj, { rel, startQuat: sq });
+            });
+        }
+
+        function beginSelectGizmoDrag(kind, axisId) {
+            if (selectedObjects.size === 0) return;
+            beginSelectTransformSnapshots();
+            selectGizmoDragging = true;
+            selectGizmoDragKind = kind;
+            selectGizmoDragAxis = axisId;
+            selectGroupDragging = true;
+            debugDragging = true;
+        }
+
+        function translateSelectGroupAlongAxis(axisId, deltaWorld) {
+            if (selectedObjects.size === 0 || !axisId) return;
+            worldAxisUnitFromGizmoId(axisId, _selDelta);
+            _selDelta.multiplyScalar(deltaWorld);
+            selectedObjects.forEach(obj => {
+                if (!obj.body || obj.body.mass <= 0) return;
+                const p = obj.body.position;
+                let ny = p.y + _selDelta.y;
+                const minY = GROUND_Y + getObjectFootClearance(obj) + GROUND_EPS;
+                ny = Math.max(ny, minY);
+                obj.body.position.set(p.x + _selDelta.x, ny, p.z + _selDelta.z);
+                obj.body.velocity.set(0, 0, 0);
+                obj.body.angularVelocity.set(0, 0, 0);
+                syncWeldSnapFromBody(obj);
+            });
+            selectDragPivot.add(_selDelta);
+        }
+
+        function applySelectGroupRotationAxis(axisChar, angle) {
+            if (!selectDragSnapshots) return;
+            if (axisChar === 'x') _selRight.set(1, 0, 0);
+            else if (axisChar === 'y') _selRight.set(0, 1, 0);
+            else _selRight.set(0, 0, 1);
+            _selRotQ.setFromAxisAngle(_selRight, angle);
+            selectDragSnapshots.forEach((snap, obj) => {
+                if (!obj.body || obj.body.mass <= 0) return;
+                _selDelta.copy(snap.rel).applyQuaternion(_selRotQ);
+                let ny = selectDragPivot.y + _selDelta.y;
+                const minY = GROUND_Y + getObjectFootClearance(obj) + GROUND_EPS;
+                ny = Math.max(ny, minY);
+                obj.body.position.set(selectDragPivot.x + _selDelta.x, ny, selectDragPivot.z + _selDelta.z);
+                const nq = snap.startQuat.clone();
+                nq.premultiply(_selRotQ);
+                obj.body.quaternion.set(nq.x, nq.y, nq.z, nq.w);
+                obj.body.velocity.set(0, 0, 0);
+                obj.body.angularVelocity.set(0, 0, 0);
+                syncWeldSnapFromBody(obj);
+            });
+        }
+
+        function handleSelectToolPointer(obj, mod) {
+            if (obj && obj.body.mass > 0) {
+                if (mod) {
+                    toggleSelectObject(obj);
+                    return true;
+                }
+                if (!selectedObjects.has(obj)) {
+                    clearSelection();
+                    addToSelection(obj);
+                }
+                updateDragModeHud();
+                return true;
+            }
+            return false;
+        }
+
+        function beginSelectMarqueeIfEmpty(mod) {
+            if (!mod) clearSelection();
+            selectMarqueeActive = true;
+            selectMarqueePx.x = 0;
+            selectMarqueePx.y = 0;
+            updateSelectMarqueeVisual();
+        }
+
+        function endSelectInteraction() {
+            if (selectMarqueeActive) {
+                selectMarqueeActive = false;
+                updateSelectMarqueeVisual();
+            }
+            if (selectGizmoDragging) {
+                selectGizmoDragging = false;
+                selectGizmoDragKind = null;
+                selectGizmoDragAxis = null;
+                selectDragAccumAngle = 0;
+            }
+            if (selectGroupDragging) {
+                selectGroupDragging = false;
+                selectDragSnapshots = null;
+                debugDragging = false;
+            }
+        }
+
+        function onMouseMove(e) {
+            if (resizeDragging && debugDragMode && debugTool === 'resize'
+                && debugResizeTarget && controls && controls.isLocked) {
+                const dx = e.movementX || 0;
+                const dy = e.movementY || 0;
+                if (dx !== 0 || dy !== 0) {
+                    const delta = screenAxisDragDelta(resizeDragAxis, dx, dy);
+                    if (Math.abs(delta) > 1e-8) applyResizeAxisDelta(debugResizeTarget, resizeDragAxis, delta);
+                }
+                return;
+            }
+            if (selectMarqueeActive && controls.isLocked && debugDragMode
+                && (debugTool === 'select' || debugTool === 'move' || debugTool === 'rotate')) {
+                const mx = e.movementX || 0;
+                const my = e.movementY || 0;
+                selectMarqueePx.x += mx;
+                selectMarqueePx.y += my;
+                updateSelectMarqueeVisual();
+                return;
+            }
+            if (selectGizmoDragging && controls.isLocked && debugDragMode && selectDragSnapshots) {
+                const mx = e.movementX || 0;
+                const my = e.movementY || 0;
+                if (mx === 0 && my === 0) return;
+                if (selectGizmoDragKind === 'move' && selectGizmoDragAxis && debugTool === 'move') {
+                    worldAxisUnitFromGizmoId(selectGizmoDragAxis, _selRight);
+                    const delta = screenWorldAxisDragDelta(selectDragPivot, _selRight, mx, my);
+                    if (Math.abs(delta) > 1e-8) translateSelectGroupAlongAxis(selectGizmoDragAxis, delta);
+                } else if (selectGizmoDragKind === 'rotate' && selectGizmoDragAxis && debugTool === 'rotate') {
+                    const dAng = screenWorldAxisRotateDelta(selectDragPivot, selectGizmoDragAxis, mx, my);
+                    selectDragAccumAngle += dAng;
+                    applySelectGroupRotationAxis(selectGizmoDragAxis, selectDragAccumAngle);
+                }
+                return;
+            }
         }
 
         function onWheel(e) {
-            if (!controls.isLocked || !debugDragMode || debugTool !== 'resize' || !debugResizeTarget) return;
-            e.preventDefault();
-            const dir = e.deltaY > 0 ? 0.92 : 1.08;
-            applyDebugScale(debugResizeTarget, dir);
+            if (!controls.isLocked) return;
+            if (debugDragMode && debugTool === 'resize' && debugResizeTarget) {
+                e.preventDefault();
+                if (!debugResizeTarget._resizeSession) beginResizeSession(debugResizeTarget);
+                const dir = e.deltaY > 0 ? 0.92 : 1.08;
+                applyResizeUniformScale(debugResizeTarget, dir);
+            }
         }
 
         function onMouseDown(e) {
             if (!controls.isLocked) return;
+            if (mountedVehiclePhy && (e.button === 0 || e.button === 1)) return;
+            if (e.button === 1) {
+                e.preventDefault();
+                const obj = pickObjectFromRay();
+                if (obj && obj.body.mass > 0) {
+                    if (weldedObjects.has(obj)) weldedObjects.delete(obj);
+                    else {
+                        const snapQ = new CANNON.Quaternion();
+                        snapQ.copy(obj.body.quaternion);
+                        weldedObjects.set(obj, {
+                            pos: obj.body.position.clone(),
+                            quat: snapQ
+                        });
+                    }
+                }
+                return;
+            }
             if (e.button === 0) {
                 if (debugDragMode) {
+                    if (debugTool === 'gravity' || debugTool === 'friction') {
+                        const surf = pickSurfaceAtCrosshair();
+                        if (!surf) return;
+                        if (surf.isFloor) {
+                            openPhysicsTuneModal(debugTool, 'world', null);
+                        } else if (surf.obj && surf.obj.body && surf.obj.body.mass > 0) {
+                            openPhysicsTuneModal(debugTool, 'object', surf.obj);
+                        }
+                        return;
+                    }
+                    if (debugTool === 'paint' || debugTool === 'mass' || debugTool === 'ignite') {
+                        let obj = null;
+                        if (debugTool === 'mass' && grabbedObject && grabbedObject.body && grabbedObject.body.mass > 0) {
+                            obj = grabbedObject;
+                        } else {
+                            obj = pickObjectFromRay();
+                        }
+                        if (obj && obj.body && obj.body.mass > 0) {
+                            openSandboxToolModal(debugTool, obj);
+                        }
+                        return;
+                    }
+                    if (debugTool === 'gun') {
+                        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                        const bodies = objectsToUpdate.map(o => o.mesh);
+                        const hits = raycaster.intersectObjects(bodies, true);
+                        const dirGun = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+                        let hitWorld = null;
+                        if (hits.length) {
+                            const hit = hits[0];
+                            hitWorld = hit.point;
+                            let obj = null;
+                            objectsToUpdate.forEach(o => {
+                                o.mesh.traverse(c => { if (c === hit.object) obj = o; });
+                                if (o.mesh === hit.object) obj = o;
+                            });
+                            if (obj && obj.body.mass > 0) {
+                                if (obj.type === 'explosive_barrel' || obj.type === 'explosive_rocket') {
+                                    const p = obj.body.position.clone();
+                                    removeObject(obj);
+                                    triggerExplosionChain(p);
+                                    addDebugGunBeam(hitWorld);
+                                    return;
+                                }
+                                weldedObjects.delete(obj);
+                                const k = DEBUG_GUN_KNOCKBACK / Math.max(obj.body.mass, 0.01);
+                                obj.body.velocity.x += dirGun.x * k;
+                                obj.body.velocity.y += dirGun.y * k;
+                                obj.body.velocity.z += dirGun.z * k;
+                            }
+                        }
+                        addDebugGunBeam(hitWorld);
+                        return;
+                    }
+                    if (debugTool === 'rocket_launcher') {
+                        const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+                        const spawnPt = camera.position.clone().addScaledVector(dir, 1.38);
+                        spawnPt.y += 0.05;
+                        const up = new THREE.Vector3(0, 1, 0);
+                        const q3 = new THREE.Quaternion();
+                        if (Math.abs(up.dot(dir)) > 0.995) {
+                            q3.setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI * 0.5);
+                        } else {
+                            q3.setFromUnitVectors(up, dir.clone());
+                        }
+                        const rot = new CANNON.Quaternion(q3.x, q3.y, q3.z, q3.w);
+                        createPhysicsObject('explosive_rocket', new CANNON.Vec3(spawnPt.x, spawnPt.y, spawnPt.z), null, rot);
+                        const spawned = objectsToUpdate[objectsToUpdate.length - 1];
+                        if (spawned && spawned.type === 'explosive_rocket') {
+                            spawned.rocketThrustOn = true;
+                            spawned.explosiveRocketArmedAt = performance.now() / 1000;
+                            spawned.rocketLauncherFired = true;
+                            const v = ROCKET_LAUNCHER_MUZZLE_SPEED;
+                            spawned.body.velocity.set(dir.x * v, dir.y * v, dir.z * v);
+                        }
+                        return;
+                    }
                     if (debugTool === 'delete') {
                         const obj = pickObjectFromRay();
                         if (obj && obj.body.mass > 0) removeObject(obj);
@@ -1696,18 +4295,51 @@
                     }
                     if (debugTool === 'resize') {
                         const obj = pickObjectFromRay();
-                        debugResizeTarget = obj && obj.body.mass > 0 ? obj : null;
+                        const info = obj && getObjectResizeInfo(obj);
+                        if (info) {
+                            if (debugResizeTarget !== obj) selectResizeTarget(obj);
+                        } else if (obj && obj.body.mass > 0) {
+                            clearResizeTarget();
+                        }
+                        const handle = pickResizeHandleFromRay();
+                        if (handle && debugResizeTarget) {
+                            if (!debugResizeTarget._resizeSession) beginResizeSession(debugResizeTarget);
+                            resizeDragging = true;
+                            resizeDragAxis = handle.userData.resizeAxis;
+                            if (weldedObjects.has(debugResizeTarget)) syncWeldSnapFromBody(debugResizeTarget);
+                            return;
+                        }
+                        if (!obj) clearResizeTarget();
                         return;
                     }
-                    if (debugTool === 'move') {
-                        const obj = pickObjectFromRay();
-                        if (obj && obj.body.mass > 0) {
-                            grabbedObject = obj;
-                            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-                            const hi = raycaster.intersectObjects([obj.mesh], true);
-                            grabDist = hi.length ? hi[0].distance : 5;
-                            debugDragging = true;
+                    if (debugTool === 'select' || debugTool === 'move' || debugTool === 'rotate') {
+                        const mod = e.shiftKey || e.ctrlKey;
+                        if (debugTool === 'move') {
+                            const handle = pickMoveGizmoHandle();
+                            if (handle && selectedObjects.size > 0) {
+                                beginSelectGizmoDrag('move', handle.userData.gizmoAxis);
+                                return;
+                            }
                         }
+                        if (debugTool === 'rotate') {
+                            const handle = pickRotateGizmoHandle();
+                            if (handle && selectedObjects.size > 0) {
+                                beginSelectGizmoDrag('rotate', handle.userData.gizmoAxis);
+                                return;
+                            }
+                        }
+                        const obj = pickObjectFromRay();
+                        if (handleSelectToolPointer(obj, mod)) {
+                            if (debugTool === 'rotate' && selectedObjects.size > 0) {
+                                const handle = pickRotateGizmoHandle();
+                                if (handle) {
+                                    beginSelectGizmoDrag('rotate', handle.userData.gizmoAxis);
+                                    return;
+                                }
+                            }
+                            return;
+                        }
+                        beginSelectMarqueeIfEmpty(mod);
                         return;
                     }
                     return;
@@ -1732,22 +4364,44 @@
                         holderBody.position.y = Math.max(holderBody.position.y, MIN_HOLDER_Y);
                         mouseConstraint = new CANNON.PointToPointConstraint(obj.body, localPivot, holderBody, new CANNON.Vec3(0,0,0));
                         world.addConstraint(mouseConstraint);
+                        hasPrevGrabTarget = false;
+                        grabRodVelocity.set(0, 0, 0);
                     }
                 }
             } else if (e.button === 2 && grabbedObject && !debugDragMode) {
                 const look = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                grabbedObject.body.velocity.set(look.x * 50, look.y * 50, look.z * 50);
+                const sp = THROW_BASE_SPEED * interactionSlowMoBoostMul();
+                grabbedObject.body.velocity.set(look.x * sp, look.y * sp, look.z * sp);
+                grabRodVelocity.set(0, 0, 0);
+                hasPrevGrabTarget = false;
                 onMouseUp();
             }
         }
 
-        function onMouseUp() {
+        function onMouseUp(e) {
+            if (debugDragMode && (debugTool === 'select' || debugTool === 'move' || debugTool === 'rotate')) {
+                if (selectMarqueeActive) {
+                    finishSelectMarquee(e && (e.shiftKey || e.ctrlKey));
+                }
+                endSelectInteraction();
+            }
+            if (resizeDragging) {
+                resizeDragging = false;
+                resizeDragAxis = null;
+                if (debugResizeTarget) beginResizeSession(debugResizeTarget);
+                return;
+            }
+            const g = grabbedObject;
+            const hadGrabConstraint = !!mouseConstraint;
             if (mouseConstraint) {
                 world.removeConstraint(mouseConstraint);
                 mouseConstraint = null;
             }
+            if (g && hadGrabConstraint && !debugDragMode) applyGrabReleaseFlick(g);
             grabbedObject = null;
             debugDragging = false;
+            hasPrevGrabTarget = false;
+            grabRodVelocity.set(0, 0, 0);
         }
 
         function onWindowResize() {
@@ -1765,32 +4419,66 @@
             const dt = Math.min(clock.getDelta(), 0.1);
             const simDt = dt * getSimTimeScale();
 
-            if (controls.isLocked) {
-                const speed = isGhostMode ? ghostSpeed : playerSpeed;
-                const inputDir = new THREE.Vector3();
-                inputDir.z = Number(moveBackward) - Number(moveForward); 
-                inputDir.x = Number(moveRight) - Number(moveLeft); 
-                inputDir.normalize();
-                const moveVec = new THREE.Vector3().copy(inputDir).applyQuaternion(camera.quaternion);
-                
-                if (isGhostMode) {
-                    const vertDir = Number(moveUp) - Number(moveDown);
-                    playerBody.position.x += moveVec.x * speed * dt;
-                    playerBody.position.z += moveVec.z * speed * dt;
-                    playerBody.position.y += vertDir * speed * dt;
-                    playerBody.velocity.set(0, 0, 0);
+            updateExplosionFX(dt);
+            updateGunBeams(dt);
+            updateIgniteStates();
+
+            if (debugGunGroup) {
+                debugGunGroup.visible = !!(controls && controls.isLocked && debugDragMode && debugTool === 'gun');
+            }
+            if (debugRocketLauncherGroup) {
+                debugRocketLauncherGroup.visible = !!(controls && controls.isLocked && debugDragMode && debugTool === 'rocket_launcher');
+            }
+            updateResizeGizmoVisual();
+            updateSelectGizmoVisual();
+
+            if (controls && controls.isLocked) {
+                if (mountedVehiclePhy && !isGhostMode) {
+                    applyBuggyDriveInput();
                 } else {
-                    playerBody.velocity.x = moveVec.x * speed;
-                    playerBody.velocity.z = moveVec.z * speed;
-                }
+                    const speed = isGhostMode ? ghostSpeed : playerSpeed;
+                    const inputDir = new THREE.Vector3();
+                    inputDir.z = Number(moveBackward) - Number(moveForward);
+                    inputDir.x = Number(moveRight) - Number(moveLeft);
+                    if (inputDir.lengthSq() > 1e-10) inputDir.normalize();
+                    else inputDir.set(0, 0, 0);
+                    const moveVec = new THREE.Vector3().copy(inputDir).applyQuaternion(camera.quaternion);
 
-                camera.position.copy(playerBody.position);
-                camera.position.y += 0.5; 
+                    if (isGhostMode) {
+                        const vertDir = Number(moveUp) - Number(moveDown);
+                        playerBody.position.x += moveVec.x * speed * dt;
+                        playerBody.position.z += moveVec.z * speed * dt;
+                        playerBody.position.y += vertDir * speed * dt;
+                        playerBody.velocity.set(0, 0, 0);
+                    } else {
+                        playerBody.velocity.x = moveVec.x * speed;
+                        playerBody.velocity.z = moveVec.z * speed;
+                    }
 
-                if (mouseConstraint) {
-                    const target = new THREE.Vector3(0, 0, -grabDist).applyQuaternion(camera.quaternion).add(camera.position);
-                    target.y = Math.max(target.y, MIN_HOLDER_Y);
-                    holderBody.position.copy(target);
+                    if (useThirdPersonCamera) {
+                        applyThirdPersonCameraOffset();
+                    } else {
+                        camera.position.copy(playerBody.position);
+                        camera.position.y += FIRST_PERSON_EYE_Y;
+                    }
+
+                    if (mouseConstraint) {
+                        const target = new THREE.Vector3(0, 0, -grabDist).applyQuaternion(camera.quaternion).add(camera.position);
+                        target.y = Math.max(target.y, MIN_HOLDER_Y);
+                        holderBody.position.copy(target);
+                        if (!debugDragMode) {
+                            if (hasPrevGrabTarget) {
+                                grabRodVelocity.subVectors(target, prevGrabTargetWorld).multiplyScalar(1 / Math.max(dt, 1e-6));
+                            } else {
+                                grabRodVelocity.set(0, 0, 0);
+                            }
+                            prevGrabTargetWorld.copy(target);
+                            hasPrevGrabTarget = true;
+                        }
+                    } else {
+                        hasPrevGrabTarget = false;
+                        grabRodVelocity.set(0, 0, 0);
+                    }
                 }
             }
 
@@ -1798,6 +4486,7 @@
 
             if (simDt > 0) {
                 objectsToUpdate.forEach(o => {
+                    if (weldedObjects.has(o)) return;
                     if (o.isNpc && o.body && o.body.mass > 0) {
                         if (o._npcPhase == null) o._npcPhase = Math.random() * Math.PI * 2;
                         o._npcPhase += simDt * (0.52 + 0.34 * Math.sin(performance.now() * 0.0011));
@@ -1807,13 +4496,17 @@
                         const yaw = Math.atan2(o.body.velocity.x, o.body.velocity.z);
                         o.body.quaternion.setFromEuler(0, yaw, 0);
                     }
-                    if (o.type === 'rocket' && o.rocketThrustOn && o.body && o.body.mass > 0) {
+                    if ((o.type === 'rocket' || o.type === 'explosive_rocket') && o.rocketThrustOn && o.body && o.body.mass > 0) {
                         const dir = new CANNON.Vec3();
                         o.body.quaternion.vmult(new CANNON.Vec3(0, 1, 0), dir);
                         const push = 38 * simDt * ROCKET_THRUST_POWER;
                         o.body.velocity.x += dir.x * push;
                         o.body.velocity.y += dir.y * push;
                         o.body.velocity.z += dir.z * push;
+                    }
+                    if (o.type === 'explosive_rocket' && o.rocketThrustOn && o.explosiveRocketArmedAt > 0 && o.body && o.body.mass > 0) {
+                        const elapsed = performance.now() / 1000 - o.explosiveRocketArmedAt;
+                        if (elapsed >= EXPLOSIVE_ROCKET_FUSE_SEC) queueBarrelDetonation(o);
                     }
                     if (o.isFreeBalloon && o.body && o.body.mass > 0) {
                         o.body.velocity.y += 6.2 * simDt;
@@ -1822,13 +4515,53 @@
                 });
 
                 applyRopeAndCordForces(simDt);
+                applyCustomGravityForces();
 
                 world.step(1/60, simDt, 3);
+                if (barrelDetonateQueue.length) {
+                    const q = barrelDetonateQueue.slice();
+                    barrelDetonateQueue.length = 0;
+                    for (let bi = 0; bi < q.length; bi++) {
+                        const bo = q[bi];
+                        if (objectsToUpdate.indexOf(bo) < 0) continue;
+                        const bp = bo.body.position.clone();
+                        removeObject(bo);
+                        triggerExplosionChain(bp);
+                    }
+                }
             }
 
+            weldedObjects.forEach((snap, o) => {
+                if (objectsToUpdate.indexOf(o) < 0) {
+                    weldedObjects.delete(o);
+                    return;
+                }
+                o.body.position.copy(snap.pos);
+                o.body.quaternion.copy(snap.quat);
+                o.body.velocity.set(0, 0, 0);
+                o.body.angularVelocity.set(0, 0, 0);
+            });
+
             compensatePlayerNonSimTime(dt, simDt);
-            
+
+            if (controls && controls.isLocked && mountedVehiclePhy && !isGhostMode) {
+                syncPlayerToBuggySeat();
+                if (useThirdPersonCamera) {
+                    applyThirdPersonCameraOffset();
+                } else {
+                    camera.position.copy(playerBody.position);
+                    camera.position.y += FIRST_PERSON_EYE_Y;
+                }
+            }
+
+            const nowDespawn = performance.now() / 1000;
+            for (let di = objectsToUpdate.length - 1; di >= 0; di--) {
+                const od = objectsToUpdate[di];
+                if (od.debrisExpireAt != null && nowDespawn >= od.debrisExpireAt) removeObject(od);
+            }
+
             objectsToUpdate.forEach(o => {
+                if (o.type === 'buggy') syncBuggyWheelMeshes(o);
                 o.mesh.position.copy(o.body.position);
                 o.mesh.quaternion.copy(o.body.quaternion);
                 if (o.body.position.y < getDespawnYThreshold(o)) removeObject(o);
@@ -1847,10 +4580,35 @@
 
             if (grabbedObject && mouseConstraint) clampBodyBottomAboveGround(grabbedObject);
 
+            syncPlayerAvatarVisual();
+
             renderer.render(scene, camera);
         }
 
-        window.onload = init;
+        window.onload = function () {
+            const boot = document.getElementById('boot-error');
+            function showBootError(msg) {
+                if (boot) {
+                    boot.textContent = msg;
+                    boot.style.display = 'block';
+                }
+                console.error(msg);
+            }
+            try {
+                if (typeof THREE === 'undefined') {
+                    showBootError('Three.js failed to load. Check your connection, or serve this folder over HTTP (e.g. npx --yes serve .) instead of opening file://.');
+                    return;
+                }
+                if (typeof CANNON === 'undefined') {
+                    showBootError('Cannon.js failed to load. Check your connection, or serve this folder over HTTP (e.g. npx --yes serve .) instead of opening file://.');
+                    return;
+                }
+                init();
+            } catch (err) {
+                showBootError((err && err.message) ? err.message : String(err));
+                console.error(err);
+            }
+        };
     </script>
 </body>
 </html>
